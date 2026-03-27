@@ -238,57 +238,92 @@ export const useForecastStore = create(
   )
 )
 
-// ── Inspector store (separate — not persisted except API key) ──
+// ── Inspector store (separate — not persisted except prefs) ──
 export const useInspectorStore = create(
   persist(
     immer((set, get) => ({
-      // Settings
+      // API key — in-memory only; read/written to localStorage directly (user-scoped)
       apiKey: '',
+
+      // Settings
       systemPrompt: '',
       coachingFocus: '',
+
+      // View prefs (persisted)
+      aiEnabled:   false,
+      groupBy:     'category',  // 'category'|'rep'|'stage'|'none'
+      sortBy:      'severity',  // 'severity'|'amount'|'closeDate'
+      flaggedOnly: false,
 
       // Run state
       isRunning: false,
       abortController: null,
-      repResults: {},        // { [owner]: { text, loading, error } }
-      lastResult: null,      // { repsSorted, active, runDate, ... }
-      activeTab: 'reps',     // 'reps' | 'insights'
+      repResults: {},        // { [owner]: { summary, actions, loading, error } }
+      lastResult: null,      // { repsSorted, active, runDate }
+      activeTab: 'reps',     // 'reps'|'insights'
 
       // Usage log
       usageLog: [],
 
-      setApiKey: (key) => set(s => { s.apiKey = key }),
-      setSystemPrompt: (p) => set(s => { s.systemPrompt = p }),
-      setCoachingFocus: (f) => set(s => { s.coachingFocus = f }),
-      setActiveTab: (tab) => set(s => { s.activeTab = tab }),
+      // ── API key (localStorage-scoped) ──
+      // Read key from localStorage under user-scoped or generic key
+      initApiKey: (userId) => {
+        const lsKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
+        const key   = localStorage.getItem(lsKey) || ''
+        set(s => {
+          s.apiKey   = key
+          // Auto-enable AI if a key is found and aiEnabled was never explicitly set
+          if (key && !s.aiEnabled) s.aiEnabled = true
+        })
+      },
+
+      // Write key to localStorage and update in-memory state
+      setApiKey: (key, userId) => {
+        const lsKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
+        if (key) {
+          localStorage.setItem(lsKey, key)
+        } else {
+          localStorage.removeItem(lsKey)
+        }
+        set(s => { s.apiKey = key })
+      },
+
+      setSystemPrompt:  (p)   => set(s => { s.systemPrompt  = p }),
+      setCoachingFocus: (f)   => set(s => { s.coachingFocus = f }),
+      setActiveTab:     (tab) => set(s => { s.activeTab     = tab }),
+      setAiEnabled:     (v)   => set(s => { s.aiEnabled     = v }),
+      setGroupBy:       (v)   => set(s => { s.groupBy       = v }),
+      setSortBy:        (v)   => set(s => { s.sortBy        = v }),
+      setFlaggedOnly:   (v)   => set(s => { s.flaggedOnly   = v }),
 
       startRun: (abortController) => set(s => {
-        s.isRunning = true
+        s.isRunning      = true
         s.abortController = abortController
-        s.repResults = {}
+        s.repResults     = {}
       }),
 
       setRepLoading: (owner) => set(s => {
-        s.repResults[owner] = { loading: true, text: null, error: null }
+        s.repResults[owner] = { loading: true, summary: null, actions: {}, error: null }
       }),
 
-      setRepResult: (owner, text) => set(s => {
-        s.repResults[owner] = { loading: false, text, error: null }
+      // result: { summary: string, actions: { [nameLower]: string } }
+      setRepResult: (owner, result) => set(s => {
+        s.repResults[owner] = { loading: false, summary: result.summary, actions: result.actions || {}, error: null }
       }),
 
       setRepError: (owner, error) => set(s => {
-        s.repResults[owner] = { loading: false, text: null, error }
+        s.repResults[owner] = { loading: false, summary: null, actions: {}, error }
       }),
 
       finishRun: (lastResult) => set(s => {
-        s.isRunning = false
+        s.isRunning       = false
         s.abortController = null
-        s.lastResult = lastResult
+        s.lastResult      = lastResult
       }),
 
       stopRun: () => set(s => {
         if (s.abortController) s.abortController.abort()
-        s.isRunning = false
+        s.isRunning       = false
         s.abortController = null
       }),
 
@@ -305,11 +340,14 @@ export const useInspectorStore = create(
     {
       name: 'moat-inspector-v27',
       storage: createJSONStorage(() => localStorage),
+      // apiKey is NOT persisted here — managed directly in localStorage with user scoping
       partialize: (s) => ({
-        apiKey: s.apiKey,
-        systemPrompt: s.systemPrompt,
+        systemPrompt:  s.systemPrompt,
         coachingFocus: s.coachingFocus,
-        usageLog: s.usageLog,
+        usageLog:      s.usageLog,
+        aiEnabled:     s.aiEnabled,
+        groupBy:       s.groupBy,
+        sortBy:        s.sortBy,
       }),
     }
   )

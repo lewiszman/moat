@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useForecastStore } from './store/forecastStore'
+import { useForecastStore, useInspectorStore } from './store/forecastStore'
 import { useSessionStore } from './store/sessionStore'
 import { useDarkMode } from './hooks/useDarkMode'
 import { useAutoSave } from './hooks/useAutoSave'
@@ -21,6 +21,7 @@ export default function App() {
   const recalc        = useForecastStore(s => s.recalc)
   const loadShareState = useForecastStore(s => s.loadShareState)
   const setUser       = useSessionStore(s => s.setUser)
+  const initApiKey    = useInspectorStore(s => s.initApiKey)
   const [dark] = useDarkMode()
 
   // Activate debounced auto-save (no-ops when not signed in)
@@ -30,10 +31,22 @@ export default function App() {
   useEffect(() => {
     // Supabase auth — sync current session and listen for changes
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      const user = session?.user ?? null
+      setUser(user)
+      initApiKey(user?.id)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+      const user = session?.user ?? null
+      // On sign-in: migrate generic moat_apikey → user-scoped key
+      if (user) {
+        const generic = localStorage.getItem('moat_apikey')
+        if (generic) {
+          localStorage.setItem(`moat_apikey_${user.id}`, generic)
+          localStorage.removeItem('moat_apikey')
+        }
+      }
+      setUser(user)
+      initApiKey(user?.id)
     })
 
     // Share URL params

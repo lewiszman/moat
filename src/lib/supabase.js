@@ -18,9 +18,21 @@ export function signOut() {
 }
 
 // ── Snapshot helpers ────────────────────────────────────────────
+
+// Strip any field whose key looks like a credential — belt-and-suspenders safety.
+// extractSnapshot already does explicit field selection, but this guards against
+// accidental spread or future changes.
+export function sanitizeSnapshot(obj) {
+  const safe = { ...obj }
+  Object.keys(safe).forEach(k => {
+    if (/key|secret|token/i.test(k)) delete safe[k]
+  })
+  return safe
+}
+
 // Pull only the saveable keys from the forecast store state
 export function extractSnapshot(state) {
-  return {
+  return sanitizeSnapshot({
     managerName: state.managerName,
     managerTeam: state.managerTeam,
     quarterLabel: state.quarterLabel,
@@ -42,7 +54,7 @@ export function extractSnapshot(state) {
     m2_prob: state.m2_prob,   m2_up: state.m2_up,
     m3_closed: state.m3_closed, m3_commit: state.m3_commit,
     m3_prob: state.m3_prob,   m3_up: state.m3_up,
-  }
+  })
 }
 
 // ── CRUD ────────────────────────────────────────────────────────
@@ -50,6 +62,7 @@ export function extractSnapshot(state) {
 // Auto-save: upsert the single rolling auto-save per user + quarter.
 // Avoids unbounded DB growth — one row per quarter gets refreshed.
 export async function autoSaveSession(userId, quarterLabel, snapshot) {
+  const safe = sanitizeSnapshot(snapshot)
   const { data: existing } = await supabase
     .from('sessions')
     .select('id')
@@ -63,20 +76,21 @@ export async function autoSaveSession(userId, quarterLabel, snapshot) {
   if (existing) {
     return supabase
       .from('sessions')
-      .update({ snapshot, updated_at: new Date().toISOString() })
+      .update({ snapshot: safe, updated_at: new Date().toISOString() })
       .eq('id', existing.id)
   }
   return supabase
     .from('sessions')
-    .insert({ user_id: userId, quarter_label: quarterLabel, snapshot, is_auto: true })
+    .insert({ user_id: userId, quarter_label: quarterLabel, snapshot: safe, is_auto: true })
 }
 
 // Named snapshot: always insert a new row
 export async function saveNamedSession(userId, quarterLabel, snapshot, label) {
+  const safe = sanitizeSnapshot(snapshot)
   return supabase.from('sessions').insert({
     user_id: userId,
     quarter_label: quarterLabel,
-    snapshot,
+    snapshot: safe,
     is_auto: false,
     label: label || null,
   })

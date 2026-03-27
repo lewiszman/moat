@@ -1,6 +1,6 @@
 import { bizDaysFrom, isWeekday } from './fmt'
 
-// Stage → minimum expected FC category
+// ── Stage alignment maps ────────────────────────────────────────
 export const STAGE_MIN_FC = {
   'discovery':          'pipeline',
   'qualification':      'pipeline',
@@ -32,13 +32,13 @@ export const STAGE_MAX_FC = {
 export const CAT_RANK = { pipeline: 0, upside: 1, probable: 2, commit: 3 }
 
 export const MEDDPICC_FIELDS = [
-  { key: 'f_metrics',      label: 'Metrics (M)' },
-  { key: 'f_econ_buyer',   label: 'Economic Buyer (E)' },
-  { key: 'f_dec_criteria', label: 'Decision Criteria (DC)' },
-  { key: 'f_dec_process',  label: 'Decision Process (DP)' },
-  { key: 'f_proc_process', label: 'Procurement Process (PP)' },
-  { key: 'f_implicated',   label: 'Implicated Pain (I)' },
-  { key: 'f_champion',     label: 'Champion (C)' },
+  { key: 'f_metrics',      label: 'Metrics (M)',            flagId: 'MEDDPICC_M'  },
+  { key: 'f_econ_buyer',   label: 'Economic Buyer (E)',     flagId: 'MEDDPICC_E'  },
+  { key: 'f_dec_criteria', label: 'Decision Criteria (DC)', flagId: 'MEDDPICC_DC' },
+  { key: 'f_dec_process',  label: 'Decision Process (DP)',  flagId: 'MEDDPICC_DP' },
+  { key: 'f_proc_process', label: 'Procurement (PP)',       flagId: 'MEDDPICC_PP' },
+  { key: 'f_implicated',   label: 'Implicated Pain (I)',    flagId: 'MEDDPICC_I'  },
+  { key: 'f_champion',     label: 'Champion (C)',           flagId: 'MEDDPICC_C'  },
 ]
 
 export const EARLY_STAGES = ['discovery', 'qualification', 'demo']
@@ -61,33 +61,58 @@ export const CAT_BG = {
   omitted:  '#f9fafb',
 }
 
+// ── Typed flag definitions ──────────────────────────────────────
+// Shape: { id, label, sev: 'critical'|'warn', weight }
+// Higher weight = sorted to top. sev='critical' renders red, sev='warn' renders amber.
+export const FLAG_DEFS = {
+  CLOSE_PAST:        { id: 'CLOSE_PAST',        label: 'Close date passed',             sev: 'critical', weight: 100 },
+  CLOSE_3BD:         { id: 'CLOSE_3BD',          label: 'Close ≤3 biz days',             sev: 'critical', weight:  90 },
+  NO_NEXT_STEP:      { id: 'NO_NEXT_STEP',       label: 'Next step empty',               sev: 'critical', weight:  85 }, // sev/weight override at runtime for non-commit/prob
+  LAST_ACTIVITY_14D: { id: 'LAST_ACTIVITY_14D',  label: 'No activity 14d+',              sev: 'critical', weight:  80 },
+  AMOUNT_ZERO:       { id: 'AMOUNT_ZERO',        label: 'Amount $0',                     sev: 'critical', weight:  75 },
+  FC_TOO_HIGH:       { id: 'FC_TOO_HIGH',        label: 'FC too high for stage',         sev: 'critical', weight:  70 },
+  CLOSE_WEEKEND:     { id: 'CLOSE_WEEKEND',      label: 'Close on weekend',              sev: 'warn',     weight:  50 },
+  CLOSE_10BD_DISC:   { id: 'CLOSE_10BD_DISC',   label: 'Discovery: close <10 biz days', sev: 'warn',     weight:  45 },
+  FC_TOO_LOW:        { id: 'FC_TOO_LOW',         label: 'FC too low for stage',          sev: 'warn',     weight:  40 },
+  MEDDPICC_E:        { id: 'MEDDPICC_E',         label: 'Economic Buyer empty',          sev: 'warn',     weight:  35 },
+  MEDDPICC_C:        { id: 'MEDDPICC_C',         label: 'Champion empty',                sev: 'warn',     weight:  35 },
+  MEDDPICC_M:        { id: 'MEDDPICC_M',         label: 'Metrics empty',                 sev: 'warn',     weight:  30 },
+  MEDDPICC_I:        { id: 'MEDDPICC_I',         label: 'Implicated Pain empty',         sev: 'warn',     weight:  30 },
+  MEDDPICC_DC:       { id: 'MEDDPICC_DC',        label: 'Decision Criteria empty',       sev: 'warn',     weight:  30 },
+  MEDDPICC_DP:       { id: 'MEDDPICC_DP',        label: 'Decision Process empty',        sev: 'warn',     weight:  30 },
+  MEDDPICC_PP:       { id: 'MEDDPICC_PP',        label: 'Procurement Process empty',     sev: 'warn',     weight:  25 },
+  NO_ACTIVITY_DATA:  { id: 'NO_ACTIVITY_DATA',   label: 'No activity date available',    sev: 'warn',     weight:  20 },
+}
+
+// Flat list for filter UI
+export const FLAG_DEF_LIST = Object.values(FLAG_DEFS)
+
+// ── Flag engine ─────────────────────────────────────────────────
 export function flagDeal(deal) {
   const flags = []
-  const now = new Date()
+  const now   = new Date()
   now.setHours(0, 0, 0, 0)
-  const cat = deal.f_fc_cat_norm || 'pipeline'
+  const cat   = deal.f_fc_cat_norm || 'pipeline'
   const stage = (deal.f_stage || '').toLowerCase().trim()
-  const amt = deal.f_amount_num || 0
+  const amt   = deal.f_amount_num || 0
 
   // 1. Close date
-  if (!deal.f_close_date) {
-    flags.push({ sev: 'amber', text: 'No close date' })
-  } else {
+  if (deal.f_close_date) {
     const cd = new Date(deal.f_close_date)
     cd.setHours(0, 0, 0, 0)
     if (!isNaN(cd)) {
       const calDays = Math.floor((cd - now) / 86400000)
-      const cdDay = cd.getDay()
+      const cdDay   = cd.getDay()
       if (calDays < 0) {
-        flags.push({ sev: 'red', text: 'Close date in the past' })
+        flags.push(FLAG_DEFS.CLOSE_PAST)
       } else if (cdDay === 0 || cdDay === 6) {
-        flags.push({ sev: 'amber', text: 'Close date lands on a weekend' })
+        flags.push(FLAG_DEFS.CLOSE_WEEKEND)
       } else {
         const bizDays = bizDaysFrom(now, cd)
         if (bizDays <= 3) {
-          flags.push({ sev: 'red', text: 'Close date within 3 business days' })
+          flags.push(FLAG_DEFS.CLOSE_3BD)
         } else if (stage.includes('discovery') && bizDays < 10) {
-          flags.push({ sev: 'amber', text: 'Discovery stage — close <10 business days away' })
+          flags.push(FLAG_DEFS.CLOSE_10BD_DISC)
         }
       }
     }
@@ -100,23 +125,22 @@ export function flagDeal(deal) {
       const minRank = CAT_RANK[STAGE_MIN_FC[stageKey]] ?? 0
       const maxRank = CAT_RANK[STAGE_MAX_FC[stageKey]] ?? 3
       const catRank = CAT_RANK[cat] ?? 0
-      if (catRank > maxRank)
-        flags.push({ sev: 'red', text: `FC too high for ${stageKey} stage (max: ${STAGE_MAX_FC[stageKey]})` })
-      else if (catRank < minRank)
-        flags.push({ sev: 'amber', text: `FC too low for ${stageKey} stage (min: ${STAGE_MIN_FC[stageKey]})` })
+      if (catRank > maxRank)      flags.push(FLAG_DEFS.FC_TOO_HIGH)
+      else if (catRank < minRank) flags.push(FLAG_DEFS.FC_TOO_LOW)
     }
   }
 
-  // 3. Next step
-  if (!deal.f_next_step || deal.f_next_step.trim() === '')
-    flags.push({ sev: ['commit', 'probable'].includes(cat) ? 'red' : 'amber', text: 'Next step empty' })
+  // 3. Next step — critical for commit/probable, warn otherwise
+  if (!deal.f_next_step || deal.f_next_step.trim() === '') {
+    const isCrit = ['commit', 'probable'].includes(cat)
+    flags.push({ ...FLAG_DEFS.NO_NEXT_STEP, sev: isCrit ? 'critical' : 'warn', weight: isCrit ? 85 : 22 })
+  }
 
-  // 4. MEDDPICC — Commit/Probable only, not early stage
+  // 4. MEDDPICC — commit/probable only, not early stage
   const isEarlyStage = EARLY_STAGES.some(s => stage.includes(s))
   if (['commit', 'probable'].includes(cat) && !isEarlyStage) {
-    MEDDPICC_FIELDS.forEach(f => {
-      if (!(deal[f.key] || '').trim())
-        flags.push({ sev: 'amber', text: `${f.label} empty` })
+    MEDDPICC_FIELDS.forEach(({ key, flagId }) => {
+      if (!(deal[key] || '').trim()) flags.push(FLAG_DEFS[flagId])
     })
   }
 
@@ -125,14 +149,14 @@ export function flagDeal(deal) {
     const la = new Date(deal.f_last_activity)
     if (!isNaN(la)) {
       const daysSince = Math.floor((now - la) / 86400000)
-      if (daysSince > 14) flags.push({ sev: 'red', text: `No activity ${daysSince}d` })
+      if (daysSince > 14) flags.push(FLAG_DEFS.LAST_ACTIVITY_14D)
     }
   } else {
-    flags.push({ sev: 'amber', text: 'No activity date available' })
+    flags.push(FLAG_DEFS.NO_ACTIVITY_DATA)
   }
 
-  // 6. Amount
-  if (amt === 0) flags.push({ sev: 'red', text: 'Amount $0' })
+  // 6. Amount zero
+  if (amt === 0) flags.push(FLAG_DEFS.AMOUNT_ZERO)
 
   return flags
 }
@@ -144,4 +168,9 @@ export function groupByRep(records) {
     map[owner].push(r)
     return map
   }, {})
+}
+
+// Total flag weight for a deal (used for sort)
+export function dealWeight(deal) {
+  return (deal._flags || []).reduce((s, f) => s + (f.weight || 0), 0)
 }

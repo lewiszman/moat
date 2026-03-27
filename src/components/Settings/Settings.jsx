@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useInspectorStore, useForecastStore } from '../../store/forecastStore'
+import { useSessionStore } from '../../store/sessionStore'
 import { DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { fmt } from '../../lib/fmt'
 
@@ -188,17 +189,18 @@ function DefaultsTab() {
 // ── Inspector tab ──────────────────────────────────────────────
 function InspectorTab() {
   const { apiKey, setApiKey, systemPrompt, setSystemPrompt, coachingFocus, setCoachingFocus } = useInspectorStore()
+  const user     = useSessionStore(s => s.user)
   const [showKey, setShowKey] = useState(false)
 
   return (
     <div>
       <Section title="Anthropic API key">
-        <Row label="API key" sub="Stored in browser localStorage only. Never transmitted except to api.anthropic.com.">
+        <Row label="API key" sub="Stored in your browser only — never sent to Supabase or shared.">
           <div className="flex items-center gap-2">
             <input
               type={showKey ? 'text' : 'password'}
               value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
+              onChange={e => setApiKey(e.target.value, user?.id)}
               placeholder="sk-ant-..."
               className="w-60 font-mono text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
             />

@@ -1,133 +1,291 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react'
 import { useForecastStore, useInspectorStore } from '../../store/forecastStore'
-import { flagDeal, groupByRep, CAT_COLORS } from '../../lib/flags'
-import { fetchAISummary, fetchManagerInsights, formatForSlack, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
+import { useSessionStore } from '../../store/sessionStore'
+import { flagDeal, groupByRep, dealWeight, FLAG_DEF_LIST } from '../../lib/flags'
+import { fetchAISummary, fetchManagerInsights, findDealAction, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
+import { formatSlackMessage } from '../../lib/slackFormatter'
 import { fmt } from '../../lib/fmt'
 
 const CAT_ORDER  = ['commit', 'probable', 'upside', 'pipeline']
 const CAT_LABEL  = { commit: 'Commit', probable: 'Probable', upside: 'Upside', pipeline: 'Pipeline' }
 const CAT_ACCENT = { commit: '#1a56db', probable: '#0d7c3d', upside: '#b45309', pipeline: '#6b7280' }
 
-// ── XLSX export ──────────────────────────────────────────────────
+// ── Grouping helpers ──────────────────────────────────────────
+
+function buildGroups(deals, groupBy) {
+  if (groupBy === 'category') {
+    return CAT_ORDER
+      .map(cat => ({
+        key: cat, label: CAT_LABEL[cat], accent: CAT_ACCENT[cat],
+        deals: deals.filter(d => d.f_fc_cat_norm === cat),
+      }))
+      .filter(g => g.deals.length > 0)
+  }
+  if (groupBy === 'rep') {
+    const byRep = {}
+    deals.forEach(d => {
+      const o = d._owner || 'Unknown'
+      if (!byRep[o]) byRep[o] = []
+      byRep[o].push(d)
+    })
+    return Object.entries(byRep)
+      .map(([owner, ds]) => ({ key: owner, label: owner, accent: '#6b7280', deals: ds }))
+      .sort((a, b) =>
+        b.deals.reduce((s, d) => s + dealWeight(d), 0) -
+        a.deals.reduce((s, d) => s + dealWeight(d), 0)
+      )
+  }
+  if (groupBy === 'stage') {
+    const byStage = {}
+    deals.forEach(d => {
+      const st = d.f_stage || 'Unknown'
+      if (!byStage[st]) byStage[st] = []
+      byStage[st].push(d)
+    })
+    return Object.entries(byStage).map(([stage, ds]) => ({
+      key: stage, label: stage, accent: '#6b7280', deals: ds,
+    }))
+  }
+  return [{ key: 'all', label: null, accent: '#6b7280', deals }]
+}
+
+function sortDeals(deals, sortBy) {
+  return [...deals].sort((a, b) => {
+    if (sortBy === 'amount')    return (b.f_amount_num || 0) - (a.f_amount_num || 0)
+    if (sortBy === 'closeDate') {
+      const da = a.f_close_date ? new Date(a.f_close_date) : new Date(9999, 0)
+      const db = b.f_close_date ? new Date(b.f_close_date) : new Date(9999, 0)
+      return da - db
+    }
+    return dealWeight(b) - dealWeight(a) // default: severity
+  })
+}
+
+// ── XLSX export ───────────────────────────────────────────────
 
 async function exportInspectionXLSX(repsSorted) {
   const XLSX = await import('xlsx')
-
-  const rows = [
-    ['AE', 'Deal', 'Amount', 'FC Category', 'Stage', 'Close Date', 'Next Step', 'Flags', 'Severity'],
-  ]
-
+  const rows = [['AE', 'Deal', 'Amount', 'FC Category', 'Stage', 'Close Date', 'Next Step', 'Flags', 'Severity']]
   repsSorted.forEach(([owner, deals]) => {
     deals.forEach(deal => {
       const flags    = deal._flags || []
-      const flagText = flags.map(f => `[${f.sev.toUpperCase()}] ${f.text}`).join('; ')
-      const severity = flags.some(f => f.sev === 'red') ? 'Critical'
+      const flagText = flags.map(f => `[${f.sev.toUpperCase()}] ${f.label}`).join('; ')
+      const severity = flags.some(f => f.sev === 'critical') ? 'Critical'
         : flags.length > 0 ? 'Warning' : 'Clean'
-      rows.push([
-        owner,
-        deal.f_opp_name   || '',
-        deal.f_amount_num || 0,
-        deal.f_fc_cat_norm || '',
-        deal.f_stage       || '',
-        deal.f_close_date  || '',
-        deal.f_next_step   || '',
-        flagText,
-        severity,
-      ])
+      rows.push([owner, deal.f_opp_name || '', deal.f_amount_num || 0,
+        deal.f_fc_cat_norm || '', deal.f_stage || '', deal.f_close_date || '',
+        deal.f_next_step || '', flagText, severity])
     })
   })
-
   const ws = XLSX.utils.aoa_to_sheet(rows)
-  // Column widths
-  ws['!cols'] = [14,30,12,12,18,12,40,60,10].map(w => ({ wch: w }))
-
+  ws['!cols'] = [14, 30, 12, 12, 18, 12, 40, 60, 10].map(w => ({ wch: w }))
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Inspection')
   XLSX.writeFile(wb, `moat-inspection-${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-// ── Sub-components ───────────────────────────────────────────────
+// ── MultiSelect dropdown ──────────────────────────────────────
+
+function MultiSelect({ label, options, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  // Close on outside click
+  React.useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const toggle = (v) => {
+    onChange(value.includes(v) ? value.filter(x => x !== v) : [...value, v])
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`btn text-[11px] flex items-center gap-1 ${value.length > 0 ? 'border-[var(--blue)] text-[var(--blue)]' : ''}`}
+      >
+        {label}{value.length > 0 ? ` (${value.length})` : ''} <span className="opacity-50">▾</span>
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 bg-[var(--bg)] border border-[var(--bdr2)] rounded-lg shadow-lg min-w-[160px] max-h-60 overflow-y-auto py-1">
+          {options.map(opt => (
+            <label key={opt.value} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg2)] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={value.includes(opt.value)}
+                onChange={() => toggle(opt.value)}
+                className="accent-[var(--blue)]"
+              />
+              <span className="text-[12px] text-[var(--tx)]">{opt.label}</span>
+            </label>
+          ))}
+          {value.length > 0 && (
+            <button
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-1.5 text-[11px] text-[var(--tx2)] hover:bg-[var(--bg2)] border-t border-[var(--bdr2)] mt-1"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Flag chips ────────────────────────────────────────────────
 
 function FlagChip({ flag }) {
   return (
-    <span
-      className={`inline-flex text-[10px] px-1.5 py-px rounded font-[500] whitespace-nowrap
-        ${flag.sev === 'red'
-          ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
-          : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-        }`}
-    >
-      {flag.text}
+    <span className={`inline-flex text-[10px] px-1.5 py-px rounded font-[500] whitespace-nowrap ${
+      flag.sev === 'critical'
+        ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+        : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+    }`}>
+      {flag.label}
     </span>
   )
 }
 
-function DealRow({ deal, aiMap }) {
-  const nameKey = (deal.f_opp_name || '').toLowerCase()
-  const aiTagged = aiMap && [...aiMap.keys()].some(k => nameKey.includes(k) || k.includes(nameKey.substring(0, 20)))
-  const hasRed = (deal._flags || []).some(f => f.sev === 'red')
-  const cd = deal.f_close_date
-    ? new Date(deal.f_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : '—'
-  const ns = (deal.f_next_step || '—').substring(0, 60) + (deal.f_next_step?.length > 60 ? '…' : '')
+// ── Deal row ──────────────────────────────────────────────────
+
+function DealRow({ deal, cols, repResult }) {
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const hasCrit  = (deal._flags || []).some(f => f.sev === 'critical')
+  const cd       = deal.f_close_date ? new Date(deal.f_close_date) : null
+  const cdPast   = cd && cd < now
+  const cdNear   = cd && !cdPast && (cd - now) / 86400000 <= 14
+  const cdStr    = cd ? cd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+  const nsStr    = (deal.f_next_step || '—').substring(0, 60) + (deal.f_next_step?.length > 60 ? '…' : '')
+  const aiAction = findDealAction(repResult?.actions, deal.f_opp_name)
 
   return (
-    <tr className={hasRed ? 'bg-red-50/40 dark:bg-red-950/20' : ''}>
-      <td className="px-3 py-2 font-[600] text-[12px] max-w-[160px]">
-        {aiTagged
-          ? <span><strong>{deal.f_opp_name || '—'}</strong> <span className="text-[9px] text-purple-500" title="Flagged by AI">✦</span></span>
-          : deal.f_opp_name || '—'}
-      </td>
-      <td className="px-3 py-2 font-[600] text-[12px] whitespace-nowrap">{fmt(deal.f_amount_num)}</td>
-      <td className="px-3 py-2 text-[11px] text-[var(--tx2)] whitespace-nowrap">{cd}</td>
-      <td className="px-3 py-2 text-[11px] text-[var(--tx2)] max-w-[200px]" title={deal.f_next_step || ''}>{ns}</td>
-      <td className="px-3 py-2">
-        <div className="flex flex-wrap gap-1">
-          {(deal._flags || []).length > 0
-            ? (deal._flags || []).map((f, i) => <FlagChip key={i} flag={f} />)
-            : <span className="text-[10px] text-green-600">✓ clean</span>}
+    <tr className={`border-b border-[var(--bdr2)] last:border-0 hover:bg-[var(--bg2)] transition-colors ${hasCrit ? 'bg-red-50/30 dark:bg-red-950/10' : ''}`}>
+      {cols.ae       && <td className="px-3 py-2 text-[12px] font-[500] text-[var(--tx2)] whitespace-nowrap">{deal._owner}</td>}
+      {cols.deal     && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] max-w-[200px] truncate" title={deal.f_opp_name}>{deal.f_opp_name || '—'}</td>}
+      {cols.amount   && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] whitespace-nowrap text-right">{fmt(deal.f_amount_num)}</td>}
+      {cols.close    && (
+        <td className={`px-3 py-2 text-[12px] whitespace-nowrap font-[500] ${cdPast ? 'text-red-600' : cdNear ? 'text-amber-600' : 'text-[var(--tx2)]'}`}>
+          {cdStr}
+        </td>
+      )}
+      {cols.stage    && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] whitespace-nowrap max-w-[120px] truncate" title={deal.f_stage}>{deal.f_stage || '—'}</td>}
+      {cols.fc       && (
+        <td className="px-3 py-2">
+          <span className="text-[10px] font-[700] uppercase tracking-wide" style={{ color: CAT_ACCENT[deal.f_fc_cat_norm] || '#6b7280' }}>
+            {CAT_LABEL[deal.f_fc_cat_norm] || deal.f_fc_cat_norm || '—'}
+          </span>
+        </td>
+      )}
+      {cols.nextstep && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] max-w-[200px]" title={deal.f_next_step || ''}>{nsStr}</td>}
+      {cols.flags    && (
+        <td className="px-3 py-2">
+          <div className="flex flex-wrap gap-1">
+            {(deal._flags || []).length > 0
+              ? (deal._flags || []).map((f, i) => <FlagChip key={i} flag={f} />)
+              : <span className="text-[10px] text-green-600">✓ clean</span>
+            }
+          </div>
+        </td>
+      )}
+      {cols.aiaction && (
+        <td className="px-3 py-2 text-[11px] text-[var(--tx)]">
+          {repResult?.loading
+            ? <span className="flex gap-1">{[0,200,400].map(d => <span key={d} className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--blue)] animate-pulse" style={{ animationDelay: `${d}ms` }} />)}</span>
+            : aiAction
+              ? <span className="text-purple-700 dark:text-purple-300">{aiAction}</span>
+              : repResult?.error
+                ? <span className="text-red-500 text-[10px]">Error</span>
+                : null
+          }
+        </td>
+      )}
+    </tr>
+  )
+}
+
+// ── Group header row ──────────────────────────────────────────
+
+function GroupHeader({ group, colCount, collapsed, onToggle, showAE }) {
+  const total = group.deals.reduce((s, d) => s + (d.f_amount_num || 0), 0)
+  const crit  = group.deals.flatMap(d => d._flags || []).filter(f => f.sev === 'critical').length
+  const warn  = group.deals.flatMap(d => d._flags || []).filter(f => f.sev === 'warn').length
+
+  if (!group.label) return null // groupBy=none: no header
+
+  return (
+    <tr
+      className="bg-[var(--bg2)] cursor-pointer hover:bg-[var(--bg2)] select-none"
+      onClick={onToggle}
+    >
+      <td colSpan={colCount} className="px-3 py-2">
+        <div className="flex items-center gap-2.5">
+          <span className="text-[10px] text-[var(--tx2)] transition-transform" style={{ transform: collapsed ? 'rotate(-90deg)' : '', display: 'inline-block' }}>▼</span>
+          <div className="w-1.5 h-3.5 rounded-sm flex-shrink-0" style={{ background: group.accent }} />
+          <span className="text-[11px] font-[700] uppercase tracking-wide" style={{ color: group.accent }}>
+            {group.label}
+          </span>
+          <span className="text-[11px] text-[var(--tx2)]">
+            {group.deals.length} deal{group.deals.length !== 1 ? 's' : ''} · {fmt(total)}
+          </span>
+          {crit > 0 && <span className="text-[10px] font-[700] text-red-600">🔴 {crit}</span>}
+          {warn > 0 && <span className="text-[10px] font-[600] text-amber-600">🟡 {warn}</span>}
+          {crit === 0 && warn === 0 && <span className="text-[10px] font-[600] text-green-600">✓ clean</span>}
         </div>
       </td>
     </tr>
   )
 }
 
-function CategorySection({ cat, deals, aiMap }) {
-  const catAmt   = deals.reduce((s, d) => s + d.f_amount_num, 0)
-  const catRed   = deals.flatMap(d => d._flags || []).filter(f => f.sev === 'red').length
-  const catAmber = deals.flatMap(d => d._flags || []).filter(f => f.sev === 'amber').length
-  const sorted   = [...deals].sort((a, b) => {
-    const sa = (a._flags || []).reduce((s, f) => s + (f.sev === 'red' ? 2 : 1), 0)
-    const sb = (b._flags || []).reduce((s, f) => s + (f.sev === 'red' ? 2 : 1), 0)
-    return sb - sa
-  })
+// ── Table ─────────────────────────────────────────────────────
+
+function InspectorTable({ groups, cols, repResults, collapsed, onToggle }) {
+  const visibleCols = Object.entries(cols).filter(([, v]) => v).map(([k]) => k)
+  const colCount    = visibleCols.length
+
+  const COL_HEADERS = {
+    ae: 'AE', deal: 'Deal', amount: 'Amount', close: 'Close',
+    stage: 'Stage', fc: 'FC', nextstep: 'Next Step', flags: 'Flags', aiaction: 'AI Action',
+  }
 
   return (
-    <div className="border-b border-[var(--bdr2)] last:border-0">
-      <div className="flex items-center gap-2 px-3 py-2 bg-[var(--bg2)]">
-        <div className="w-1 h-3.5 rounded-sm flex-shrink-0" style={{ background: CAT_ACCENT[cat] }} />
-        <span className="text-[10px] font-[700] uppercase tracking-wide" style={{ color: CAT_ACCENT[cat] }}>
-          {CAT_LABEL[cat]}
-        </span>
-        <span className="text-[11px] text-[var(--tx2)]">
-          {deals.length} deal{deals.length !== 1 ? 's' : ''} · {fmt(catAmt)}
-        </span>
-        {catRed   > 0 && <span className="text-[10px] font-[700] text-red-600 ml-1">⚠ {catRed} critical</span>}
-        {catAmber > 0 && <span className="text-[10px] font-[600] text-amber-600 ml-1">▲ {catAmber}</span>}
-      </div>
+    <div className="card overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[12px]">
           <thead>
-            <tr className="bg-[var(--bg2)]">
-              {['Deal', 'Amount', 'Close', 'Next step', 'Flags'].map(h => (
-                <th key={h} className="px-3 py-1.5 text-left text-[10px] font-[700] uppercase tracking-wide text-[var(--tx2)] border-b border-[var(--bdr2)]">
-                  {h}
+            <tr className="bg-[var(--bg2)] border-b border-[var(--bdr2)]">
+              {visibleCols.map(col => (
+                <th key={col} className={`px-3 py-2 text-left text-[10px] font-[700] uppercase tracking-wide text-[var(--tx2)] whitespace-nowrap ${col === 'amount' ? 'text-right' : ''}`}>
+                  {COL_HEADERS[col]}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {sorted.map((deal, i) => <DealRow key={i} deal={deal} aiMap={aiMap} />)}
+            {groups.map(group => (
+              <React.Fragment key={group.key}>
+                <GroupHeader
+                  group={group}
+                  colCount={colCount}
+                  collapsed={!!collapsed[group.key]}
+                  onToggle={() => onToggle(group.key)}
+                  showAE={cols.ae}
+                />
+                {!collapsed[group.key] && group.deals.map((deal, i) => (
+                  <DealRow
+                    key={`${deal._owner}-${deal.f_opp_name}-${i}`}
+                    deal={deal}
+                    cols={cols}
+                    repResult={repResults[deal._owner]}
+                  />
+                ))}
+              </React.Fragment>
+            ))}
           </tbody>
         </table>
       </div>
@@ -135,66 +293,37 @@ function CategorySection({ cat, deals, aiMap }) {
   )
 }
 
-function RepBlock({ owner, deals, aiResult }) {
-  const [open, setOpen] = useState(false)
-  const allFlags  = deals.flatMap(d => d._flags || [])
-  const redCount  = allFlags.filter(f => f.sev === 'red').length
-  const amberCount = allFlags.filter(f => f.sev === 'amber').length
-  const totalAmt  = deals.reduce((s, d) => s + d.f_amount_num, 0)
-  const sevClass  = redCount > 0 ? 'border-l-red-500' : amberCount > 0 ? 'border-l-amber-500' : 'border-l-green-500'
-  const aiMap     = aiResult?.text ? parseAIFlags(aiResult.text) : null
+// ── Stats bar ─────────────────────────────────────────────────
 
+function StatsBar({ stats, isRunning, runningOwner, repsDone, repsTotal }) {
   return (
-    <div className={`card mb-3 border-l-4 ${sevClass} overflow-hidden`}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-[var(--bg)] hover:bg-[var(--bg2)] transition-colors cursor-pointer border-none text-left"
-      >
-        <span className="font-[700] text-[13px] text-[var(--tx)] flex-1">{owner}</span>
-        <div className="flex items-center gap-2">
-          {redCount   > 0 && <span className="text-[10px] font-[700] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">⚠ {redCount} critical</span>}
-          {amberCount > 0 && <span className="text-[10px] font-[700] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">▲ {amberCount} warning{amberCount !== 1 ? 's' : ''}</span>}
-          {redCount === 0 && amberCount === 0 && <span className="text-[10px] font-[700] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Clean</span>}
-          <span className="text-[11px] text-[var(--tx2)]">{deals.length} deals · {fmt(totalAmt)}</span>
-        </div>
-        <span className="text-[var(--tx2)] text-[11px] transition-transform duration-150" style={{ transform: open ? 'rotate(180deg)' : '' }}>▼</span>
-      </button>
-
-      {open && (
-        <div>
-          {aiResult?.loading && (
-            <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--bdr2)] bg-[var(--bg2)] text-[12px] text-[var(--tx2)]">
-              <span className="inline-block w-2 h-2 rounded-full bg-[var(--blue)] animate-pulse" />
-              <span className="inline-block w-2 h-2 rounded-full bg-[var(--blue)] animate-pulse [animation-delay:200ms]" />
-              <span className="inline-block w-2 h-2 rounded-full bg-[var(--blue)] animate-pulse [animation-delay:400ms]" />
-              <span>Generating AI summary…</span>
-            </div>
-          )}
-          {aiResult?.text && (
-            <div className="px-4 py-3 border-t border-[var(--bdr2)] bg-[var(--bg2)]">
-              <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-2">✨ AI coaching summary</div>
-              <div className="text-[12px] text-[var(--tx)] leading-relaxed whitespace-pre-wrap">
-                {formatForSlack(aiResult.text)}
-              </div>
-            </div>
-          )}
-          {aiResult?.error && (
-            <div className="px-4 py-3 border-t border-[var(--bdr2)] text-[12px] text-red-600">
-              AI summary unavailable: {aiResult.error}
-            </div>
-          )}
-          {CAT_ORDER.map(cat => {
-            const catDeals = deals.filter(d => d.f_fc_cat_norm === cat)
-            if (!catDeals.length) return null
-            return <CategorySection key={cat} cat={cat} deals={catDeals} aiMap={aiMap} />
-          })}
+    <div className="card overflow-hidden mb-3">
+      <div className="grid grid-cols-6 divide-x divide-[var(--bdr2)]">
+        {[
+          { label: 'AEs',             val: stats.aes,             color: '' },
+          { label: 'Active deals',    val: stats.deals,           color: '' },
+          { label: 'Total pipeline',  val: fmt(stats.pipe),       color: '' },
+          { label: 'Critical flags',  val: stats.crit,            color: 'text-red-600' },
+          { label: 'Warnings',        val: stats.warn,            color: 'text-amber-600' },
+          { label: 'AEs w/ critical', val: stats.aesWithCrit,     color: 'text-red-600' },
+        ].map((s, i) => (
+          <div key={i} className="flex flex-col items-center justify-center py-3">
+            <div className={`text-[18px] font-[700] ${s.color}`}>{s.val}</div>
+            <div className="text-[9px] uppercase tracking-wider text-[var(--tx2)] mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      {isRunning && runningOwner && (
+        <div className="px-4 py-1.5 bg-[var(--bg2)] border-t border-[var(--bdr2)] flex items-center gap-2 text-[11px] text-[var(--tx2)]">
+          <span className="inline-block w-2 h-2 rounded-full bg-[var(--blue)] animate-pulse" />
+          Summarising {runningOwner}… {repsDone}/{repsTotal}
         </div>
       )}
     </div>
   )
 }
 
-// ── Insights tab ─────────────────────────────────────────────────
+// ── Insights tab ──────────────────────────────────────────────
 
 function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
   const insp = useInspectorStore()
@@ -202,27 +331,26 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError,   setInsightsError]   = useState(null)
 
-  // Flag frequency
   const flagFreq = useMemo(() => {
     const freq = {}
     active.forEach(d => {
       (d._flags || []).forEach(f => {
-        if (!freq[f.text]) freq[f.text] = { red: 0, amber: 0 }
-        freq[f.text][f.sev]++
+        if (!freq[f.id]) freq[f.id] = { label: f.label, crit: 0, warn: 0 }
+        if (f.sev === 'critical') freq[f.id].crit++
+        else freq[f.id].warn++
       })
     })
-    return Object.entries(freq)
-      .map(([text, c]) => ({ text, red: c.red || 0, amber: c.amber || 0, total: (c.red || 0) + (c.amber || 0) }))
+    return Object.values(freq)
+      .map(v => ({ ...v, total: v.crit + v.warn }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 10)
   }, [active])
 
-  // AE risk scores
   const aeRisk = useMemo(() => repsSorted.map(([owner, deals]) => {
     const flags = deals.flatMap(d => d._flags || [])
-    const score = flags.reduce((s, f) => s + (f.sev === 'red' ? 2 : 1), 0)
-    const red   = flags.filter(f => f.sev === 'red').length
-    return { owner, score, red }
+    const score = flags.reduce((s, f) => s + (f.weight || 0), 0)
+    const crit  = flags.filter(f => f.sev === 'critical').length
+    return { owner, score, crit }
   }).sort((a, b) => b.score - a.score), [repsSorted])
 
   const maxFreq  = flagFreq[0]?.total || 1
@@ -230,68 +358,55 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
 
   const fetchInsights = async () => {
     if (!apiKey || !repsSorted.length) return
-    setInsightsLoading(true)
-    setInsightsError(null)
+    setInsightsLoading(true); setInsightsError(null)
     try {
       const result = await fetchManagerInsights({ repsSorted, active, apiKey, systemPrompt })
       setInsightsText(result.text)
       insp.logUsage(result.inputTokens, result.outputTokens, repsSorted.length, active.length)
-    } catch (e) {
-      setInsightsError(e.message)
-    }
+    } catch (e) { setInsightsError(e.message) }
     setInsightsLoading(false)
   }
 
   return (
     <div>
-      {/* Flag frequency */}
       <div className="card mb-4 overflow-hidden">
-        <div className="px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)] text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
-          Flag frequency
-        </div>
+        <div className="px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)] text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">Flag frequency</div>
         <div className="px-4 py-3 flex flex-col gap-2">
           {flagFreq.length === 0
             ? <div className="text-[12px] text-[var(--tx2)]">No flags — run inspection first.</div>
-            : flagFreq.map(({ text, red, amber, total }) => (
-              <div key={text} className="flex items-center gap-3">
-                <div className="text-[11px] text-[var(--tx)] w-64 flex-shrink-0 truncate" title={text}>{text}</div>
-                <div className="flex-1 flex h-5 rounded overflow-hidden bg-[var(--bg2)]">
-                  <div style={{ width: `${(red   / maxFreq) * 100}%`, minWidth: red   > 0 ? 2 : 0 }} className="bg-red-500 h-full" />
-                  <div style={{ width: `${(amber / maxFreq) * 100}%`, minWidth: amber > 0 ? 2 : 0 }} className="bg-amber-400 h-full" />
+            : flagFreq.map(({ label, crit, warn, total }) => (
+              <div key={label} className="flex items-center gap-3">
+                <div className="text-[11px] text-[var(--tx)] w-64 flex-shrink-0 truncate" title={label}>{label}</div>
+                <div className="flex-1 flex h-4 rounded overflow-hidden bg-[var(--bg2)]">
+                  <div style={{ width: `${(crit / maxFreq) * 100}%`, minWidth: crit > 0 ? 2 : 0 }} className="bg-red-500 h-full" />
+                  <div style={{ width: `${(warn / maxFreq) * 100}%`, minWidth: warn > 0 ? 2 : 0 }} className="bg-amber-400 h-full" />
                 </div>
                 <div className="text-[11px] font-[700] w-6 text-right text-[var(--tx)]">{total}</div>
-                {red > 0 && <span className="text-[9px] text-red-600 w-12 text-right">{red} 🔴</span>}
+                {crit > 0 && <span className="text-[9px] text-red-600 w-12 text-right">{crit} 🔴</span>}
               </div>
             ))
           }
         </div>
       </div>
 
-      {/* AE risk scores */}
       <div className="card mb-4 overflow-hidden">
-        <div className="px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)] text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
-          AE risk scores
-        </div>
+        <div className="px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)] text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">AE risk scores</div>
         <div className="px-4 py-3 flex flex-col gap-2">
           {aeRisk.length === 0
             ? <div className="text-[12px] text-[var(--tx2)]">Run inspection to see AE scores.</div>
-            : aeRisk.map(({ owner, score, red }) => (
+            : aeRisk.map(({ owner, score, crit }) => (
               <div key={owner} className="flex items-center gap-3">
                 <div className="text-[11px] font-[600] text-[var(--tx)] w-36 flex-shrink-0 truncate">{owner}</div>
-                <div className="flex-1 h-5 rounded overflow-hidden bg-[var(--bg2)]">
-                  <div
-                    style={{ width: `${(score / maxScore) * 100}%` }}
-                    className={`h-full transition-all ${red > 0 ? 'bg-red-500' : 'bg-amber-400'}`}
-                  />
+                <div className="flex-1 h-4 rounded overflow-hidden bg-[var(--bg2)]">
+                  <div style={{ width: `${(score / maxScore) * 100}%` }} className={`h-full transition-all ${crit > 0 ? 'bg-red-500' : 'bg-amber-400'}`} />
                 </div>
-                <div className="text-[11px] font-[700] w-6 text-right text-[var(--tx)]">{score}</div>
+                <div className="text-[11px] font-[700] w-8 text-right text-[var(--tx)]">{score}</div>
               </div>
             ))
           }
         </div>
       </div>
 
-      {/* AI team coaching themes */}
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)]">
           <span className="text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">Team coaching themes</span>
@@ -300,23 +415,14 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
             disabled={insightsLoading || !apiKey || !repsSorted.length}
             className="btn btn-primary text-[11px] flex items-center gap-1.5 disabled:opacity-50"
           >
-            {insightsLoading
-              ? <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" /> Thinking…</>
-              : '✨ Generate'
-            }
+            {insightsLoading ? <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" /> Thinking…</> : '✨ Generate'}
           </button>
         </div>
         <div className="px-4 py-4 text-[12px]">
-          {!apiKey && (
-            <p className="text-[var(--tx2)]">Add an Anthropic API key in <strong>Settings → Inspector</strong> to generate themes.</p>
-          )}
-          {apiKey && !repsSorted.length && (
-            <p className="text-[var(--tx2)]">Run inspection on the Reps tab first.</p>
-          )}
+          {!apiKey && <p className="text-[var(--tx2)]">Add your Anthropic API key in <strong>Settings → Inspector</strong> to generate themes.</p>}
+          {apiKey && !repsSorted.length && <p className="text-[var(--tx2)]">Run inspection first.</p>}
           {insightsError && <p className="text-red-600">{insightsError}</p>}
-          {insightsText && (
-            <div className="text-[var(--tx)] leading-relaxed whitespace-pre-wrap">{insightsText}</div>
-          )}
+          {insightsText && <div className="text-[var(--tx)] leading-relaxed whitespace-pre-wrap">{insightsText}</div>}
           {!insightsText && !insightsLoading && !insightsError && apiKey && repsSorted.length > 0 && (
             <p className="text-[var(--tx2)]">Click Generate to get AI-powered team coaching themes.</p>
           )}
@@ -326,51 +432,145 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
   )
 }
 
-// ── Inspector root ────────────────────────────────────────────────
+// ── Column picker ─────────────────────────────────────────────
+
+const ALL_COLS = [
+  { id: 'ae',       label: 'AE'        },
+  { id: 'deal',     label: 'Deal'      },
+  { id: 'amount',   label: 'Amount'    },
+  { id: 'close',    label: 'Close'     },
+  { id: 'stage',    label: 'Stage'     },
+  { id: 'fc',       label: 'FC'        },
+  { id: 'nextstep', label: 'Next Step' },
+  { id: 'flags',    label: 'Flags'     },
+  { id: 'aiaction', label: 'AI Action' },
+]
+
+function ColPicker({ visible, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  React.useEffect(() => {
+    if (!open) return
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(o => !o)} className="btn text-[11px]" title="Column picker">⚙</button>
+      {open && (
+        <div className="absolute top-full right-0 mt-1 z-50 bg-[var(--bg)] border border-[var(--bdr2)] rounded-lg shadow-lg py-1 min-w-[140px]">
+          {ALL_COLS.map(col => (
+            <label key={col.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg2)] cursor-pointer">
+              <input type="checkbox" checked={!!visible[col.id]} onChange={() => onChange(col.id)} className="accent-[var(--blue)]" />
+              <span className="text-[12px] text-[var(--tx)]">{col.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Inspector root ────────────────────────────────────────────
 
 export default function Inspector() {
-  const importedData = useForecastStore(s => s.importedData)
-  const insp         = useInspectorStore()
-  const [focusOpen,  setFocusOpen]  = useState(false)
-  const [flaggedOnly,setFlaggedOnly] = useState(false)
-  const [stats,      setStats]      = useState(null)
-  const [repsSorted, setRepsSorted] = useState([])
-  const [active,     setActive]     = useState([])
+  const importedData  = useForecastStore(s => s.importedData)
+  const quarterLabel  = useForecastStore(s => s.quarterLabel)
+  const insp          = useInspectorStore()
+  const { user }      = useSessionStore()
+
+  const apiKey       = insp.apiKey
+  const aiActive     = insp.aiEnabled && !!apiKey
+  const systemPrompt = insp.systemPrompt || DEFAULT_SYSTEM_PROMPT
+
+  // Local state
+  const [allDeals,    setAllDeals]    = useState([])
+  const [repsSorted,  setRepsSorted]  = useState([])
+  const [stats,       setStats]       = useState(null)
+  const [filterAEs,   setFilterAEs]   = useState([])
+  const [filterCats,  setFilterCats]  = useState([])
+  const [filterFlags, setFilterFlags] = useState([])
+  const [collapsed,   setCollapsed]   = useState({})
+  const [copyStatus,  setCopyStatus]  = useState(null)  // null | 'exec' | 'manager'
+  const [slackOpen,   setSlackOpen]   = useState(false)
+  const [focusOpen,   setFocusOpen]   = useState(false)
+  const [colsVisible, setColsVisible] = useState({
+    ae: true, deal: true, amount: true, close: true,
+    stage: true, fc: true, nextstep: true, flags: true, aiaction: false,
+  })
   const abortRef = useRef(null)
+  const slackRef = useRef(null)
 
-  const coachingFocus = insp.coachingFocus
-  const apiKey        = insp.apiKey
-  const systemPrompt  = insp.systemPrompt || DEFAULT_SYSTEM_PROMPT
-  const activeTab     = insp.activeTab
+  // Effective column visibility — aiaction auto-shows when AI is on
+  const effectiveCols = useMemo(() => ({
+    ...colsVisible,
+    aiaction: colsVisible.aiaction || aiActive,
+    ae: colsVisible.ae && insp.groupBy !== 'rep', // hide AE col when grouped by rep
+  }), [colsVisible, aiActive, insp.groupBy])
 
+  // Filter options
+  const allAEs  = useMemo(() => [...new Set(allDeals.map(d => d._owner))].sort(), [allDeals])
+  const allCats = CAT_ORDER
+
+  // Filtered + grouped + sorted deals
+  const visibleDeals = useMemo(() => {
+    let d = allDeals
+    if (filterAEs.length)   d = d.filter(x => filterAEs.includes(x._owner))
+    if (filterCats.length)  d = d.filter(x => filterCats.includes(x.f_fc_cat_norm))
+    if (filterFlags.length) d = d.filter(x => (x._flags || []).some(f => filterFlags.includes(f.id)))
+    if (insp.flaggedOnly)   d = d.filter(x => (x._flags || []).length > 0)
+    return d
+  }, [allDeals, filterAEs, filterCats, filterFlags, insp.flaggedOnly])
+
+  const groups = useMemo(() => {
+    const raw = buildGroups(visibleDeals, insp.groupBy)
+    return raw.map(g => ({ ...g, deals: sortDeals(g.deals, insp.sortBy) }))
+  }, [visibleDeals, insp.groupBy, insp.sortBy])
+
+  // AI run progress
+  const repResultVals  = Object.values(insp.repResults)
+  const runningOwner   = Object.entries(insp.repResults).find(([, r]) => r.loading)?.[0]
+  const repsDone       = repResultVals.filter(r => !r.loading).length
+  const repsTotal      = repsSorted.length
+
+  // ── Run ──
   const run = useCallback(async () => {
     if (!importedData?.length) return
 
-    const activeDeals = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
-    activeDeals.forEach(d => { d._flags = flagDeal(d) })
-
-    const byRep  = groupByRep(activeDeals)
-    const sorted = Object.entries(byRep).sort(([, a], [, b]) => {
-      const sa = a.flatMap(d => d._flags).reduce((s, f) => s + (f.sev === 'red' ? 2 : 1), 0)
-      const sb = b.flatMap(d => d._flags).reduce((s, f) => s + (f.sev === 'red' ? 2 : 1), 0)
-      return sb - sa
+    const active = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+    active.forEach(d => {
+      d._owner = d.f_owner || 'Unknown'
+      d._flags = flagDeal(d)
     })
 
-    const allFlags        = activeDeals.flatMap(d => d._flags)
-    const redFlags        = allFlags.filter(f => f.sev === 'red').length
-    const amberFlags      = allFlags.filter(f => f.sev === 'amber').length
-    const aesWithCritical = sorted.filter(([, deals]) => deals.flatMap(d => d._flags || []).some(f => f.sev === 'red')).length
-    const totalPipe       = activeDeals.reduce((s, d) => s + d.f_amount_num, 0)
+    const allFlags   = active.flatMap(d => d._flags)
+    const critCount  = allFlags.filter(f => f.sev === 'critical').length
+    const warnCount  = allFlags.filter(f => f.sev === 'warn').length
+    const byRep      = groupByRep(active)
+    const sorted     = Object.entries(byRep).sort(([, a], [, b]) =>
+      b.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0) -
+      a.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0)
+    )
+    const aesWithCrit = sorted.filter(([, deals]) =>
+      deals.flatMap(d => d._flags).some(f => f.sev === 'critical')
+    ).length
 
-    setStats({ aes: sorted.length, deals: activeDeals.length, pipe: totalPipe, red: redFlags, amber: amberFlags, aesWithCritical })
+    setAllDeals(active)
     setRepsSorted(sorted)
-    setActive(activeDeals)
+    setFilterAEs([]); setFilterCats([]); setFilterFlags([])
+    setStats({
+      aes: sorted.length, deals: active.length,
+      pipe: active.reduce((s, d) => s + d.f_amount_num, 0),
+      crit: critCount, warn: warnCount, aesWithCrit,
+    })
 
     insp.startRun(null)
     sorted.forEach(([owner]) => insp.setRepLoading(owner))
 
-    if (!apiKey) {
-      insp.finishRun({ repsSorted: sorted, active: activeDeals, runDate: new Date() })
+    if (!aiActive) {
+      insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
       return
     }
 
@@ -378,28 +578,63 @@ export default function Inspector() {
     abortRef.current = ac
     insp.startRun(ac)
 
-    let totalInput = 0, totalOutput = 0
+    let totalIn = 0, totalOut = 0
     for (const [owner, deals] of sorted) {
       if (ac.signal.aborted) break
       try {
-        const result = await fetchAISummary({ owner, deals, apiKey, systemPrompt, coachingFocus, signal: ac.signal })
-        insp.setRepResult(owner, result.text)
-        totalInput  += result.inputTokens
-        totalOutput += result.outputTokens
+        const result = await fetchAISummary({
+          owner, deals, apiKey,
+          systemPrompt, coachingFocus: insp.coachingFocus, signal: ac.signal,
+        })
+        insp.setRepResult(owner, { summary: result.summary, actions: result.actions })
+        totalIn  += result.inputTokens
+        totalOut += result.outputTokens
       } catch (err) {
         if (err.name === 'AbortError') break
         insp.setRepError(owner, err.message)
       }
     }
 
-    insp.finishRun({ repsSorted: sorted, active: activeDeals, runDate: new Date() })
-    insp.logUsage(totalInput, totalOutput, sorted.length, activeDeals.length)
-  }, [importedData, apiKey, systemPrompt, coachingFocus])
+    insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
+    insp.logUsage(totalIn, totalOut, sorted.length, active.length)
+  }, [importedData, apiKey, aiActive, systemPrompt, insp])
 
-  const stop = () => {
-    abortRef.current?.abort()
-    insp.stopRun()
+  const stop = () => { abortRef.current?.abort(); insp.stopRun() }
+
+  // ── Copy Slack ──
+  const copySlack = async (mode) => {
+    setSlackOpen(false)
+    const { execMessage, managerMessage } = formatSlackMessage(allDeals, {
+      groupBy: insp.groupBy === 'category' ? 'category' : 'rep',
+      runDate: new Date(),
+      quarterLabel,
+      repResults: insp.repResults,
+    })
+    const text = mode === 'exec' ? execMessage : managerMessage
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const blob = new Blob([text], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = `moat-slack-${mode}.txt`; a.click()
+      URL.revokeObjectURL(url)
+    }
+    setCopyStatus(mode)
+    setTimeout(() => setCopyStatus(null), 2000)
   }
+
+  // Close Slack dropdown on outside click
+  React.useEffect(() => {
+    if (!slackOpen) return
+    const h = (e) => { if (slackRef.current && !slackRef.current.contains(e.target)) setSlackOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [slackOpen])
+
+  const runCost = insp.usageLog.length > 0
+    ? (() => { const l = insp.usageLog[insp.usageLog.length - 1]; return l.input * COST_PER_INPUT_TOKEN + l.output * COST_PER_OUTPUT_TOKEN })()
+    : null
 
   if (!importedData?.length) {
     return (
@@ -411,70 +646,134 @@ export default function Inspector() {
     )
   }
 
-  const runCost = insp.usageLog.length
-    ? (() => {
-        const last = insp.usageLog[insp.usageLog.length - 1]
-        return last.input * COST_PER_INPUT_TOKEN + last.output * COST_PER_OUTPUT_TOKEN
-      })()
-    : null
-
   return (
-    <div className="max-w-4xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-4">
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap mb-3">
-        <button
-          onClick={run}
-          disabled={insp.isRunning}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><polygon points="3,2 11,7 3,12"/></svg>
-          Run inspection
+      {/* ── Toolbar row 1: actions ── */}
+      <div className="flex items-center gap-2 flex-wrap mb-2">
+        {/* Run / Stop */}
+        <button onClick={run} disabled={insp.isRunning} className="btn btn-primary flex items-center gap-1.5 text-[12px]">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><polygon points="2,1 10,5 2,9"/></svg>
+          Run
         </button>
-
         {insp.isRunning && (
-          <button onClick={stop} className="btn flex items-center gap-1.5">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><rect x="1.5" y="1.5" width="7" height="7" rx="1"/></svg>
+          <button onClick={stop} className="btn flex items-center gap-1.5 text-[12px]">
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="1"/></svg>
             Stop
           </button>
         )}
-
-        {runCost !== null && (
-          <span className="text-[11px] text-[var(--tx2)]">${runCost.toFixed(3)} last run</span>
-        )}
+        {runCost !== null && <span className="text-[11px] text-[var(--tx2)]">${runCost.toFixed(3)} last run</span>}
 
         <div className="ml-auto flex items-center gap-2">
+          {/* AI toggle */}
+          <button
+            onClick={() => insp.setAiEnabled(!insp.aiEnabled)}
+            disabled={!apiKey && !insp.aiEnabled}
+            title={!apiKey ? 'Add your Anthropic API key in Settings to enable AI insights' : undefined}
+            className={`btn text-[11px] flex items-center gap-1.5 transition-colors ${
+              aiActive
+                ? 'border-purple-400 text-purple-700 bg-purple-50 dark:bg-purple-950/30 dark:text-purple-300'
+                : 'text-[var(--tx2)]'
+            } ${!apiKey ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            ✨ AI {insp.aiEnabled ? 'ON' : 'OFF'}
+          </button>
+
+          {/* Copy Slack dropdown */}
+          {allDeals.length > 0 && (
+            <div ref={slackRef} className="relative">
+              <button
+                onClick={() => setSlackOpen(o => !o)}
+                className={`btn text-[11px] flex items-center gap-1 ${copyStatus ? 'border-green-500 text-green-700' : ''}`}
+              >
+                {copyStatus ? `Copied ✓ (${copyStatus})` : '📋 Copy Slack ▾'}
+              </button>
+              {slackOpen && (
+                <div className="absolute top-full right-0 mt-1 z-50 bg-[var(--bg)] border border-[var(--bdr2)] rounded-lg shadow-lg py-1 min-w-[140px]">
+                  <button onClick={() => copySlack('exec')}    className="w-full text-left px-3 py-2 text-[12px] hover:bg-[var(--bg2)] text-[var(--tx)]">Exec view</button>
+                  <button onClick={() => copySlack('manager')} className="w-full text-left px-3 py-2 text-[12px] hover:bg-[var(--bg2)] text-[var(--tx)]">Manager view</button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* XLSX export */}
           {repsSorted.length > 0 && (
-            <button
-              onClick={() => exportInspectionXLSX(repsSorted)}
-              className="btn text-[11px] flex items-center gap-1.5"
-              title="Export to Excel"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="1" y="1" width="10" height="10" rx="1.5"/>
-                <line x1="4" y1="4" x2="8" y2="8"/><line x1="8" y1="4" x2="4" y2="8"/>
-              </svg>
+            <button onClick={() => exportInspectionXLSX(repsSorted)} className="btn text-[11px]" title="Export to Excel">
               XLSX
             </button>
           )}
 
-          <button
-            onClick={() => setFocusOpen(o => !o)}
-            className={`btn text-[11px] ${focusOpen ? 'border-[var(--blue)] text-[var(--blue)]' : ''}`}
-          >
-            {focusOpen ? '✕ Focus' : '+ Focus'}
-          </button>
-
-          {stats && (
-            <button
-              onClick={() => setFlaggedOnly(o => !o)}
-              className={`btn text-[11px] ${flaggedOnly ? 'bg-amber-500 text-white border-amber-500' : ''}`}
-            >
-              {flaggedOnly ? 'Show all' : 'Flagged only'}
-            </button>
-          )}
+          {/* Column picker */}
+          <ColPicker visible={colsVisible} onChange={id => setColsVisible(p => ({ ...p, [id]: !p[id] }))} />
         </div>
+      </div>
+
+      {/* ── Toolbar row 2: grouping, sort, filters ── */}
+      <div className="flex items-center gap-2 flex-wrap mb-3">
+        {/* Group by */}
+        <span className="text-[11px] text-[var(--tx2)]">Group</span>
+        <select
+          value={insp.groupBy}
+          onChange={e => insp.setGroupBy(e.target.value)}
+          className="text-[11px] border border-[var(--bdr2)] rounded-[var(--rm)] px-2 py-1 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+        >
+          <option value="category">FC Category</option>
+          <option value="rep">AE</option>
+          <option value="stage">Stage</option>
+          <option value="none">None</option>
+        </select>
+
+        <span className="text-[11px] text-[var(--tx2)] ml-1">Sort</span>
+        <select
+          value={insp.sortBy}
+          onChange={e => insp.setSortBy(e.target.value)}
+          className="text-[11px] border border-[var(--bdr2)] rounded-[var(--rm)] px-2 py-1 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+        >
+          <option value="severity">Severity</option>
+          <option value="amount">Amount</option>
+          <option value="closeDate">Close date</option>
+        </select>
+
+        <div className="h-4 w-px bg-[var(--bdr2)] mx-1" />
+
+        {/* Filters */}
+        {allAEs.length > 0 && (
+          <MultiSelect
+            label="AE"
+            options={allAEs.map(ae => ({ value: ae, label: ae }))}
+            value={filterAEs}
+            onChange={setFilterAEs}
+          />
+        )}
+        <MultiSelect
+          label="Category"
+          options={allCats.map(c => ({ value: c, label: CAT_LABEL[c] }))}
+          value={filterCats}
+          onChange={setFilterCats}
+        />
+        <MultiSelect
+          label="Flag"
+          options={FLAG_DEF_LIST.map(f => ({ value: f.id, label: f.label }))}
+          value={filterFlags}
+          onChange={setFilterFlags}
+        />
+
+        {/* Flagged only toggle */}
+        <button
+          onClick={() => insp.setFlaggedOnly(!insp.flaggedOnly)}  // Add setFlaggedOnly to store
+          className={`btn text-[11px] ${insp.flaggedOnly ? 'bg-amber-500 text-white border-amber-500' : ''}`}
+        >
+          {insp.flaggedOnly ? 'Flagged only ✓' : 'Flagged only'}
+        </button>
+
+        {/* Coaching focus */}
+        <button
+          onClick={() => setFocusOpen(o => !o)}
+          className={`btn text-[11px] ${focusOpen ? 'border-[var(--blue)] text-[var(--blue)]' : ''}`}
+        >
+          {focusOpen ? '✕ Focus' : '+ Focus'}
+        </button>
       </div>
 
       {/* Focus input */}
@@ -490,43 +789,29 @@ export default function Inspector() {
         </div>
       )}
 
-      {/* Team stats bar */}
+      {/* Stats bar */}
       {stats && (
-        <div className="grid grid-cols-6 border border-[var(--bdr2)] rounded-xl overflow-hidden mb-4 bg-[var(--bg)]">
-          {[
-            { label: 'AEs',             val: stats.aes,             color: '' },
-            { label: 'Active deals',    val: stats.deals,           color: '' },
-            { label: 'Total pipeline',  val: fmt(stats.pipe),       color: '' },
-            { label: 'Critical flags',  val: stats.red,             color: 'text-red-600' },
-            { label: 'Warnings',        val: stats.amber,           color: 'text-amber-600' },
-            { label: 'AEs w/ critical', val: stats.aesWithCritical, color: 'text-red-600' },
-          ].map((s, i) => (
-            <div key={i} className="flex flex-col items-center justify-center py-3 border-r border-[var(--bdr2)] last:border-r-0">
-              <div className={`text-[18px] font-[700] ${s.color}`}>{s.val}</div>
-              <div className="text-[9px] uppercase tracking-wider text-[var(--tx2)] mt-0.5">{s.label}</div>
-            </div>
-          ))}
-        </div>
+        <StatsBar
+          stats={stats}
+          isRunning={insp.isRunning}
+          runningOwner={runningOwner}
+          repsDone={repsDone}
+          repsTotal={repsTotal}
+        />
       )}
 
-      {/* Tab bar — only show when there's data */}
-      {repsSorted.length > 0 && (
-        <div className="flex gap-0 border-b border-[var(--bdr2)] mb-4">
-          {[
-            { id: 'reps',     label: 'Reps' },
-            { id: 'insights', label: 'Insights' },
-          ].map(tab => (
+      {/* Tab bar */}
+      {allDeals.length > 0 && (
+        <div className="flex border-b border-[var(--bdr2)] mb-3">
+          {[{ id: 'reps', label: 'Reps' }, { id: 'insights', label: 'Insights' }].map(tab => (
             <button
               key={tab.id}
               onClick={() => insp.setActiveTab(tab.id)}
-              className={`
-                px-4 py-2 text-[12px] font-[600] cursor-pointer border-none bg-transparent
-                transition-colors -mb-px
-                ${activeTab === tab.id
+              className={`px-4 py-2 text-[12px] font-[600] cursor-pointer border-none bg-transparent transition-colors -mb-px ${
+                insp.activeTab === tab.id
                   ? 'text-[var(--blue)] border-b-2 border-[var(--blue)]'
                   : 'text-[var(--tx2)] hover:text-[var(--tx)]'
-                }
-              `}
+              }`}
             >
               {tab.label}
             </button>
@@ -534,22 +819,22 @@ export default function Inspector() {
         </div>
       )}
 
-      {/* Tab content */}
-      {(activeTab === 'reps' || repsSorted.length === 0) && (
-        repsSorted.map(([owner, deals]) => (
-          <RepBlock
-            key={owner}
-            owner={owner}
-            deals={flaggedOnly ? deals.filter(d => (d._flags || []).length > 0) : deals}
-            aiResult={insp.repResults[owner]}
-          />
-        ))
+      {/* Reps tab — table */}
+      {insp.activeTab === 'reps' && allDeals.length > 0 && (
+        <InspectorTable
+          groups={groups}
+          cols={effectiveCols}
+          repResults={insp.repResults}
+          collapsed={collapsed}
+          onToggle={key => setCollapsed(p => ({ ...p, [key]: !p[key] }))}
+        />
       )}
 
-      {activeTab === 'insights' && repsSorted.length > 0 && (
+      {/* Insights tab */}
+      {insp.activeTab === 'insights' && allDeals.length > 0 && (
         <InsightsTab
           repsSorted={repsSorted}
-          active={active}
+          active={allDeals}
           apiKey={apiKey}
           systemPrompt={systemPrompt}
         />
