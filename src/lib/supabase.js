@@ -6,9 +6,9 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 // ── Auth ────────────────────────────────────────────────────────
-export function signInWithGitHub() {
+export function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
-    provider: 'github',
+    provider: 'google',
     options: { redirectTo: window.location.href },
   })
 }
