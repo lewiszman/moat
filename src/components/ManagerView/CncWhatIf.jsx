@@ -6,8 +6,12 @@ import SectionComment from '../shared/SectionComment'
 export default function CncWhatIf() {
   const s = useForecastStore()
   const d = s.derived || {}
-  const cnc_pipe = d.cnc_pipe || 0
-  const cnc_rev  = d.cnc_rev  || 0
+  const cnc_pipe       = d.cnc_pipe       || 0
+  const cnc_rev        = d.cnc_rev        || 0
+  const cnc_prorated   = d.cnc_prorated   || 0
+  const weeks_total    = d.weeks_total    || 1
+  const weeks_remaining = d.weeks_remaining ?? weeks_total
+  const prorFactor     = weeks_total > 0 ? Math.round((weeks_remaining / weeks_total) * 100) : 100
 
   return (
     <div className="card overflow-hidden">
@@ -58,23 +62,33 @@ export default function CncWhatIf() {
         )}
       </div>
 
-      {/* Results */}
-      <div className="grid grid-cols-2 divide-x divide-[var(--bdr2)]">
+      {/* Results — 4-column grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[var(--bdr2)]">
         <div className="px-4 py-3">
           <div className="text-[11px] text-[var(--tx2)] mb-0.5">Qualified pipeline created</div>
           <div className="text-[18px] font-[700] text-[var(--blue)]">{fmt(cnc_pipe)}</div>
-          <div className="text-[11px] text-[var(--tx2)]">{Math.round(s.cnc_opps)} opps × {fmt(s.cnc_asp)} ASP</div>
+          <div className="text-[11px] text-[var(--tx2)]">{Math.round(s.cnc_opps)} opps × {fmt(s.cnc_asp)}</div>
         </div>
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Expected C&C bookings</div>
-          <div className="text-[18px] font-[700] text-[var(--green)]">{fmt(cnc_rev)}</div>
-          <div className="text-[11px] text-[var(--tx2)]">{fmt(cnc_pipe)} × {pct(s.r_cnc)} C&C rate</div>
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Full-quarter C&amp;C</div>
+          <div className="text-[18px] font-[700] text-[var(--tx)]">{fmt(cnc_rev)}</div>
+          <div className="text-[11px] text-[var(--tx2)]">{fmt(cnc_pipe)} × {pct(s.r_cnc)} C&amp;C rate</div>
+        </div>
+        <div className="px-4 py-3">
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Weeks remaining</div>
+          <div className="text-[18px] font-[700] text-[var(--tx)]">{weeks_remaining} <span className="text-[13px] font-[500] text-[var(--tx2)]">of {weeks_total}</span></div>
+          <div className="text-[11px] text-[var(--tx2)]">selling weeks in quarter</div>
+        </div>
+        <div className="px-4 py-3">
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">C&amp;C prorated ({prorFactor}%)</div>
+          <div className="text-[18px] font-[700] text-[var(--green)]">{fmt(cnc_prorated)}</div>
+          <div className="text-[11px] text-[var(--tx2)]">Prorated for weeks remaining — included in Commit FC</div>
         </div>
       </div>
 
       {/* Note */}
       <div className="px-4 py-2.5 bg-[var(--bg2)] border-t border-[var(--bdr2)] text-[11px] text-[var(--tx2)]">
-        C&C bookings of <strong className="text-[var(--tx)]">{fmt(cnc_rev)}</strong> included in Probable forecast and above
+        Prorated C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> included in Commit forecast and above
       </div>
     </div>
   )

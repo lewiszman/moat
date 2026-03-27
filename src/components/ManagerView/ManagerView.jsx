@@ -3,6 +3,7 @@ import { useForecastStore } from '../../store/forecastStore'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
 import CncWhatIf from './CncWhatIf'
+import WowTracker from './WowTracker'
 import MonthlyBreakdown from './MonthlyBreakdown'
 import QuarterStatusBar from './QuarterStatusBar'
 import SectionComment from '../shared/SectionComment'
@@ -155,6 +156,12 @@ export default function ManagerView() {
         <SectionComment sectionKey="cnc" placeholder="e.g. ASP reflects SMB segment only — mid-market deals excluded" />
       </div>
       <CncWhatIf />
+
+      <div className="sec-hd">
+        Week-over-week tracker
+        <SectionComment sectionKey="wow" placeholder="e.g. W6 commit slipped $200K — two deals pushed to Q+1" />
+      </div>
+      <WowTracker />
 
       {/* Modals */}
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}

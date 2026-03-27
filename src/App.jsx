@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react'
-import { useForecastStore, useInspectorStore } from './store/forecastStore'
+import { useForecastStore, useInspectorStore, useWowStore } from './store/forecastStore'
 import { useSessionStore } from './store/sessionStore'
 import { useDarkMode } from './hooks/useDarkMode'
 import { useAutoSave } from './hooks/useAutoSave'
@@ -61,6 +61,22 @@ export default function App() {
       }
     }
     recalc()
+
+    // Auto-snapshot on Monday if not already taken for this week-in-quarter
+    const today = new Date()
+    if (today.getDay() === 1) {
+      const fs = useForecastStore.getState()
+      const qInfo = getFiscalQuarterInfo(fs.qMode || 'current', fs.fyStartMonth || 1)
+      const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
+      const weekInQ = Math.floor((today - qStartDate) / (7 * 86400000)) + 1
+      const wowState = useWowStore.getState()
+      const alreadySnapped = wowState.snapshots.some(
+        snap => snap.isAuto && snap.week === weekInQ && snap.quarterLabel === fs.quarterLabel
+      )
+      if (!alreadySnapped) {
+        wowState.takeSnapshot(true)
+      }
+    }
 
     return () => subscription.unsubscribe()
   }, []) // eslint-disable-line

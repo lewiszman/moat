@@ -13,28 +13,28 @@ const CAT_SEG_COLORS = {
   probable: '#6ee7b7', cnc: '#34d399', upside: '#fcd34d',
 }
 
-function QuotaBar({ quota, closed, bk_c, bk_p, cnc_rev, bk_u, fc_up }) {
+function QuotaBar({ quota, closed, bk_c, bk_p, cnc_prorated, bk_u, fc_up }) {
   if (!quota) return null
   const cap = (v, rem) => Math.max(0, Math.min(rem, (v / quota) * 100))
-  const wC   = cap(closed,  100)
-  const wBkC = cap(bk_c,    100 - wC)
-  const wBkP = cap(bk_p,    100 - wC - wBkC)
-  const wCnc = cap(cnc_rev, 100 - wC - wBkC - wBkP)
-  const wBkU = cap(bk_u,    100 - wC - wBkC - wBkP - wCnc)
+  const wC   = cap(closed,        100)
+  const wCnc = cap(cnc_prorated,  100 - wC)
+  const wBkC = cap(bk_c,          100 - wC - wCnc)
+  const wBkP = cap(bk_p,          100 - wC - wCnc - wBkC)
+  const wBkU = cap(bk_u,          100 - wC - wCnc - wBkC - wBkP)
   const pct  = attPct(fc_up, quota)
   const col  = attVar(fc_up, quota)
 
   const segs = [
     { w: wC,   bg: CAT_SEG_COLORS.closed },
+    { w: wCnc, bg: CAT_SEG_COLORS.cnc },
     { w: wBkC, bg: CAT_SEG_COLORS.commit },
     { w: wBkP, bg: CAT_SEG_COLORS.probable },
-    { w: wCnc, bg: CAT_SEG_COLORS.cnc },
     { w: wBkU, bg: CAT_SEG_COLORS.upside },
   ]
   const legends = [
     { label: 'Closed',   bg: CAT_SEG_COLORS.closed },
-    { label: 'Commit',   bg: CAT_SEG_COLORS.commit },
     { label: 'C&C',      bg: CAT_SEG_COLORS.cnc },
+    { label: 'Commit',   bg: CAT_SEG_COLORS.commit },
     { label: 'Probable', bg: CAT_SEG_COLORS.probable },
     { label: 'Upside',   bg: CAT_SEG_COLORS.upside },
   ]
@@ -168,7 +168,7 @@ export default function ForecastCards() {
   const s = useForecastStore()
   const d = s.derived || {}
   const { quota, closed } = s
-  const { bk_c, bk_p, bk_u, cnc_rev, fc_commit, fc_prob, fc_up, bk_u_in_prob } = d
+  const { bk_c, bk_p, bk_u, cnc_rev, cnc_prorated, fc_commit, fc_prob, fc_up, bk_u_in_prob } = d
   const [expanded, setExpanded] = useState({})
 
   const toggleCard = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
@@ -229,13 +229,15 @@ export default function ForecastCards() {
       meta: CARDS_META[0],
       fc: fc_commit || 0,
       rows: [
-        { l: 'Closed QTD',       v: fmt(closed) },
-        { l: '+ Commit bookings', v: fmt(bk_c) },
+        { l: 'Closed QTD',         v: fmt(closed) },
+        { l: '+ Commit bookings',   v: fmt(bk_c) },
+        { l: '+ C&C (prorated)',    v: fmt(cnc_prorated), cnc: true },
       ],
       detailRows: [
         { l: 'Conversion rate',       v: `${s.r_commit}%` },
         { l: 'Open commit pipeline',  v: fmt(s.pipe_commit) },
         { l: 'Expected bookings',     v: fmt(bk_c) },
+        { l: 'C&C prorated',          v: fmt(cnc_prorated) },
       ],
     },
     {
@@ -244,14 +246,12 @@ export default function ForecastCards() {
       rows: [
         { l: 'Commit FC',             v: fmt(fc_commit) },
         { l: '+ Probable bookings',   v: fmt(bk_p) },
-        { l: '+ C&C bookings',        v: fmt(cnc_rev), cnc: true },
         ...(bk_u_in_prob > 0 ? [{ l: '+ ½ Upside bookings', v: fmt(bk_u_in_prob), upside: true }] : []),
       ],
       detailRows: [
-        { l: 'Conversion rate',       v: `${s.r_prob}%` },
+        { l: 'Conversion rate',        v: `${s.r_prob}%` },
         { l: 'Open probable pipeline', v: fmt(s.pipe_prob) },
-        { l: 'Expected bookings',     v: fmt(bk_p) },
-        { l: '+ C&C bookings',        v: fmt(cnc_rev) },
+        { l: 'Expected bookings',      v: fmt(bk_p) },
         ...(bk_u_in_prob > 0 ? [{ l: '+ ½ Upside bookings', v: fmt(bk_u_in_prob) }] : []),
       ],
       toggleEl: <ProbToggle />,
@@ -317,7 +317,7 @@ export default function ForecastCards() {
         closed={closed}
         bk_c={bk_c || 0}
         bk_p={bk_p || 0}
-        cnc_rev={cnc_rev || 0}
+        cnc_prorated={cnc_prorated || 0}
         bk_u={bk_u || 0}
         fc_up={fc_up || 0}
       />

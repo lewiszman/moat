@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { calcForecast } from '../lib/forecast'
 import { aggregateForecast, calcMonthlyClosedBreakdown, normalizeRecords } from '../lib/import'
+import { getFiscalQuarterInfo, sellDaysRemaining } from '../lib/fmt'
 
 // ── Default values ─────────────────────────────────────────────
 const DEFAULT_RATES = {
@@ -41,11 +42,27 @@ function computeDerived(s) {
   const bk_pp = s.pipe_pipe   * (s.r_pipe   / 100)
   const cnc_pipe = s.cnc_opps * s.cnc_asp
   const cnc_rev  = cnc_pipe   * (s.r_cnc    / 100)
+
+  // Weeks proration for C&C
+  const qInfo = getFiscalQuarterInfo(s.qMode || 'current', s.fyStartMonth || 1)
+  const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
+  const calWeeks = Math.round((qInfo.qEndDate - qStartDate) / (7 * 24 * 3600 * 1000))
+  const weeks_total = Math.max(1, calWeeks - 2)
+  let weeks_remaining
+  if (s.qMode === 'next') {
+    weeks_remaining = weeks_total
+  } else {
+    const today = new Date()
+    const sellDays = sellDaysRemaining(today, qInfo.qEndDate)
+    weeks_remaining = Math.max(0, Math.ceil(sellDays / 5))
+  }
+  const cnc_prorated = cnc_rev * (weeks_remaining / weeks_total)
+
   const { fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob } = calcForecast({
-    closed: s.closed, bk_c, bk_p, bk_u, bk_pp, cnc_rev,
+    closed: s.closed, bk_c, bk_p, bk_u, bk_pp, cnc_prorated,
     probIncludesUpside: s.probIncludesUpside,
   })
-  return { bk_c, bk_p, bk_u, bk_pp, cnc_pipe, cnc_rev, fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob }
+  return { bk_c, bk_p, bk_u, bk_pp, cnc_pipe, cnc_rev, cnc_prorated, weeks_total, weeks_remaining, fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob }
 }
 
 // ── Store ──────────────────────────────────────────────────────
@@ -381,4 +398,56 @@ export const useDealBackStore = create(
     reset: () => set(s => { s.positions = {} }),
     move: (id, col) => set(s => { s.positions[id] = col }),
   }))
+)
+
+// ── Week-over-Week tracker store ────────────────────────────────
+export const useWowStore = create(
+  persist(
+    immer((set) => ({
+      snapshots: [],             // { id, week, date, isAuto, quarterLabel, fc_commit, fc_probable, fc_upside, pipeline, closed }
+      actualClosedAtQuarterEnd: null,
+
+      takeSnapshot: (isAuto = false) => set(s => {
+        const fs = useForecastStore.getState()
+        const d = fs.derived || {}
+        const now = new Date()
+        const qInfo = getFiscalQuarterInfo(fs.qMode || 'current', fs.fyStartMonth || 1)
+        const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
+        const weekInQ = Math.floor((now - qStartDate) / (7 * 86400000)) + 1
+        s.snapshots.push({
+          id: Date.now().toString(),
+          week: weekInQ,
+          date: now.toISOString(),
+          isAuto,
+          quarterLabel: fs.quarterLabel || '',
+          fc_commit:   d.fc_commit   || 0,
+          fc_probable: d.fc_prob     || 0,
+          fc_upside:   d.fc_up       || 0,
+          pipeline:    (fs.pipe_commit || 0) + (fs.pipe_prob || 0) + (fs.pipe_up || 0) + (fs.pipe_pipe || 0),
+          closed:      fs.closed     || 0,
+        })
+      }),
+
+      deleteSnapshot: (id) => set(s => {
+        s.snapshots = s.snapshots.filter(snap => snap.id !== id)
+      }),
+
+      setActualClosed: (amount) => set(s => {
+        s.actualClosedAtQuarterEnd = amount
+      }),
+
+      clearSnapshots: () => set(s => {
+        s.snapshots = []
+        s.actualClosedAtQuarterEnd = null
+      }),
+    })),
+    {
+      name: 'moat-wow-v27',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        snapshots: s.snapshots,
+        actualClosedAtQuarterEnd: s.actualClosedAtQuarterEnd,
+      }),
+    }
+  )
 )
