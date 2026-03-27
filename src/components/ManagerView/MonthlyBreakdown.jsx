@@ -1,31 +1,30 @@
 import React, { useMemo } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
-import { fmt, parseMoney, getFiscalQuarterInfo } from '../../lib/fmt'
+import { parseMoney, getFiscalQuarterInfo } from '../../lib/fmt'
 
-// ── Helpers ────────────────────────────────────────────────────
+// ── Month metadata ──────────────────────────────────────────────
 
 function getQuarterMonths(qMode, fyStartMonth) {
   const info = getFiscalQuarterInfo(qMode, fyStartMonth)
-  const now = new Date()
+  const now  = new Date()
   now.setHours(0, 0, 0, 0)
 
   return [0, 1, 2].map(offset => {
-    const rawIdx = info.qStartMonth - 1 + offset          // 0-based
-    const mYear  = info.qStartYear + Math.floor(rawIdx / 12)
-    const mNum   = (rawIdx % 12) + 1                      // 1-based
-    const lastDay = new Date(mYear, mNum, 0)               // last calendar day
+    const rawIdx  = info.qStartMonth - 1 + offset
+    const mYear   = info.qStartYear + Math.floor(rawIdx / 12)
+    const mNum    = (rawIdx % 12) + 1
+    const lastDay = new Date(mYear, mNum, 0)
     lastDay.setHours(23, 59, 59, 999)
     const isPast    = lastDay < now
     const isCurrent = now.getMonth() + 1 === mNum && now.getFullYear() === mYear
-    const label     = new Date(mYear, mNum - 1, 1)
-      .toLocaleString('en-US', { month: 'short' })
-
-    return { mNum, mYear, isPast, isCurrent, label, key: `m${offset + 1}` }
+    const key       = `m${offset + 1}`
+    return { mNum, mYear, isPast, isCurrent, key, label: `Month ${offset + 1}` }
   })
 }
 
-// Compact editable number cell
-function MiniInput({ value, locked, onChange }) {
+// ── Editable cell ───────────────────────────────────────────────
+
+function Cell({ value, locked, onChange }) {
   const [raw, setRaw] = React.useState(null)
 
   if (locked) {
@@ -53,51 +52,55 @@ function MiniInput({ value, locked, onChange }) {
   )
 }
 
-// ── Component ──────────────────────────────────────────────────
+// ── Component ───────────────────────────────────────────────────
+
+const ROWS = [
+  { label: 'Closed',   sub: 'closed', color: 'var(--green)' },
+  { label: 'Commit',   sub: 'commit', color: 'var(--blue)'  },
+  { label: 'Probable', sub: 'prob',   color: 'var(--green)' },
+  { label: 'Upside',   sub: 'up',     color: 'var(--amber)' },
+]
+
+const COL = '120px repeat(3, 1fr) 100px'
 
 export default function MonthlyBreakdown() {
-  const s          = useForecastStore()
-  const qMode      = s.qMode
-  const fyStart    = s.fyStartMonth || 1
-  const unlocked   = s.monthUnlocked || { m1: false, m2: false, m3: false }
+  const s        = useForecastStore()
+  const qMode    = s.qMode
+  const fyStart  = s.fyStartMonth || 1
+  const unlocked = s.monthUnlocked || { m1: false, m2: false, m3: false }
 
-  const months = useMemo(
-    () => getQuarterMonths(qMode, fyStart),
-    [qMode, fyStart]
-  )
+  const months = useMemo(() => getQuarterMonths(qMode, fyStart), [qMode, fyStart])
 
-  // For Q+1 no months are auto-locked; for CQ, past months are locked unless unlocked
-  function isLocked(mInfo) {
+  // Past months lock ALL rows to actuals (only closed matters once month ends).
+  // In Q+1 mode nothing is locked yet.
+  function isPastLocked(m) {
     if (qMode === 'next') return false
-    return mInfo.isPast && !unlocked[mInfo.key]
+    return m.isPast && !unlocked[m.key]
   }
 
-  const ROWS = [
-    { label: 'Closed',   sub: 'closed',  color: '#0d7c3d', icon: '●' },
-    { label: 'Commit',   sub: 'commit',  color: '#1a56db', icon: '◆' },
-    { label: 'Probable', sub: 'prob',    color: '#0d7c3d', icon: '◆' },
-    { label: 'Upside',   sub: 'up',      color: '#b45309', icon: '◆' },
-  ]
+  // Per-row totals across months
+  const rowTotals = ROWS.map(row =>
+    months.reduce((sum, m) => {
+      // For locked months, every category counts as closed
+      const val = isPastLocked(m)
+        ? (s[`${m.key}_closed`] || 0)
+        : (s[`${m.key}_${row.sub}`] || 0)
+      return sum + val
+    }, 0)
+  )
 
-  // Totals per row
-  const rowTotals = ROWS.map(row => {
-    return months.reduce((sum, m) => sum + (s[`${m.key}_${row.sub}`] || 0), 0)
-  })
-
-  // Linearity — % of quarterly closed by month
-  const qClosed      = rowTotals[0]  // Closed row total
-  const monthClosed  = months.map(m => s[`${m.key}_closed`] || 0)
-  const linPct       = monthClosed.map(v => qClosed > 0 ? (v / qClosed) * 100 : 0)
-  const quotaPace    = (s.quota || 0) / 3                // expected per month
+  // Linearity: monthly closed as % of quarterly closed total
+  const qClosed     = months.reduce((sum, m) => sum + (s[`${m.key}_closed`] || 0), 0)
+  const monthClosed = months.map(m => s[`${m.key}_closed`] || 0)
+  const linPct      = monthClosed.map(v => qClosed > 0 ? (v / qClosed) * 100 : 0)
+  const quotaPace   = (s.quota || 0) / 3
 
   return (
     <div className="card overflow-hidden">
 
-      {/* Column headers */}
-      <div
-        className="grid items-center gap-0 bg-[var(--bg2)] border-b border-[var(--bdr2)]"
-        style={{ gridTemplateColumns: '120px repeat(3, 1fr) 110px' }}
-      >
+      {/* ── Column headers ── */}
+      <div className="grid items-center bg-[var(--bg2)] border-b border-[var(--bdr2)]"
+           style={{ gridTemplateColumns: COL }}>
         <div className="px-3 py-2" />
         {months.map(m => (
           <div key={m.key} className="px-3 py-2 flex flex-col items-center gap-0.5">
@@ -109,23 +112,26 @@ export default function MonthlyBreakdown() {
                 </span>
               )}
             </div>
-            {isLocked(m) ? (
-              <button
-                onClick={() => s.toggleMonthLock(m.key)}
-                className="text-[9px] text-[var(--tx2)] hover:text-[var(--blue)] cursor-pointer flex items-center gap-0.5 border-none bg-transparent p-0"
-                title="Unlock to edit"
-              >
-                🔒 locked
-              </button>
-            ) : m.isPast && qMode === 'current' ? (
-              <button
-                onClick={() => s.toggleMonthLock(m.key)}
-                className="text-[9px] text-amber-600 hover:text-red-600 cursor-pointer flex items-center gap-0.5 border-none bg-transparent p-0"
-                title="Re-lock"
-              >
-                🔓 unlocked
-              </button>
-            ) : null}
+            {/* Lock / unlock toggle — only relevant for CQ past months */}
+            {qMode === 'current' && m.isPast && (
+              isPastLocked(m) ? (
+                <button
+                  onClick={() => s.toggleMonthLock(m.key)}
+                  className="text-[9px] text-[var(--tx2)] hover:text-[var(--blue)] flex items-center gap-0.5 bg-transparent border-none p-0 cursor-pointer"
+                  title="Unlock to edit"
+                >
+                  🔒 locked
+                </button>
+              ) : (
+                <button
+                  onClick={() => s.toggleMonthLock(m.key)}
+                  className="text-[9px] text-amber-600 hover:text-red-600 flex items-center gap-0.5 bg-transparent border-none p-0 cursor-pointer"
+                  title="Re-lock"
+                >
+                  🔓 unlocked
+                </button>
+              )
+            )}
           </div>
         ))}
         <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] text-right">
@@ -133,28 +139,29 @@ export default function MonthlyBreakdown() {
         </div>
       </div>
 
-      {/* Data rows */}
+      {/* ── Data rows ── */}
       {ROWS.map((row, ri) => (
-        <div
-          key={row.sub}
-          className="grid items-center border-b border-[var(--bdr2)] last:border-0"
-          style={{ gridTemplateColumns: '120px repeat(3, 1fr) 110px' }}
-        >
-          {/* Row label */}
+        <div key={row.sub}
+             className="grid items-center border-b border-[var(--bdr2)]"
+             style={{ gridTemplateColumns: COL }}>
+
           <div className="px-3 py-2.5 flex items-center gap-1.5">
-            <span className="text-[10px]" style={{ color: row.color }}>{row.icon}</span>
+            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: row.color }} />
             <span className="text-[12px] font-[600] text-[var(--tx)]">{row.label}</span>
           </div>
 
-          {/* Month cells */}
           {months.map(m => {
-            const fk  = `${m.key}_${row.sub}`
-            const val = s[fk] || 0
-            const locked = isLocked(m)
+            const locked = isPastLocked(m)
+            // Locked months: all categories display closed amount
+            const displayVal = locked
+              ? (s[`${m.key}_closed`] || 0)
+              : (s[`${m.key}_${row.sub}`] || 0)
+            const fk = `${m.key}_${row.sub}`
+
             return (
               <div key={m.key} className="px-3 py-2.5 flex items-center">
-                <MiniInput
-                  value={val}
+                <Cell
+                  value={displayVal}
                   locked={locked}
                   onChange={v => s.updateInput(fk, v)}
                 />
@@ -162,7 +169,6 @@ export default function MonthlyBreakdown() {
             )
           })}
 
-          {/* Quarter total */}
           <div className="px-3 py-2.5 text-right">
             <span className="text-[12px] font-[700] text-[var(--tx)]">
               {rowTotals[ri] > 0 ? '$' + Math.round(rowTotals[ri]).toLocaleString('en-US') : '—'}
@@ -171,18 +177,16 @@ export default function MonthlyBreakdown() {
         </div>
       ))}
 
-      {/* Linearity row */}
-      <div
-        className="grid items-center border-t-2 border-[var(--bdr2)] bg-[var(--bg2)]"
-        style={{ gridTemplateColumns: '120px repeat(3, 1fr) 110px' }}
-      >
+      {/* ── Linearity row ── */}
+      <div className="grid items-center border-t-2 border-[var(--bdr2)] bg-[var(--bg2)]"
+           style={{ gridTemplateColumns: COL }}>
         <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
           Linearity
         </div>
         {months.map((m, i) => {
-          const pct     = linPct[i]
-          const diff    = pct - 33.33
-          const color   = Math.abs(diff) < 3 ? '#0d7c3d' : Math.abs(diff) < 8 ? '#b45309' : '#dc2626'
+          const pct  = linPct[i]
+          const diff = pct - 33.33
+          const color = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--coral)'
           return (
             <div key={m.key} className="px-3 py-2 flex flex-col items-start gap-0.5">
               <span className="text-[12px] font-[700]" style={{ color }}>
@@ -201,25 +205,23 @@ export default function MonthlyBreakdown() {
         </div>
       </div>
 
-      {/* vs Quota pace row */}
+      {/* ── vs Quota pace row ── */}
       {s.quota > 0 && (
-        <div
-          className="grid items-center border-t border-[var(--bdr2)] bg-[var(--bg2)]"
-          style={{ gridTemplateColumns: '120px repeat(3, 1fr) 110px' }}
-        >
+        <div className="grid items-center border-t border-[var(--bdr2)] bg-[var(--bg2)]"
+             style={{ gridTemplateColumns: COL }}>
           <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
             vs Pace
           </div>
           {months.map((m, i) => {
-            const actual = monthClosed[i]
-            const diff   = actual - quotaPace
-            const pct    = quotaPace > 0 ? (actual / quotaPace) * 100 : 0
-            const locked = isLocked(m)
-            // Only show pace for past/current months with actuals
-            if (!locked && !months[i].isCurrent && qMode === 'current') {
+            const actual  = monthClosed[i]
+            const diff    = actual - quotaPace
+            const pct     = quotaPace > 0 ? (actual / quotaPace) * 100 : 0
+            const locked  = isPastLocked(m)
+            // Only show pace for past months with actuals, or current month
+            if (!locked && !m.isCurrent && qMode === 'current') {
               return <div key={m.key} className="px-3 py-2 text-[10px] text-[var(--tx2)]">—</div>
             }
-            const color = pct >= 100 ? '#0d7c3d' : pct >= 80 ? '#b45309' : '#dc2626'
+            const color = pct >= 100 ? 'var(--green)' : pct >= 80 ? 'var(--amber)' : 'var(--coral)'
             return (
               <div key={m.key} className="px-3 py-2 flex flex-col items-start gap-0.5">
                 <span className="text-[12px] font-[700]" style={{ color }}>
@@ -233,7 +235,7 @@ export default function MonthlyBreakdown() {
           })}
           <div className="px-3 py-2 text-right">
             <span className="text-[11px] font-[700] text-[var(--tx2)]">
-              {s.quota > 0 ? `${Math.round((rowTotals[0] / s.quota) * 100)}%` : '—'}
+              {s.quota > 0 ? `${Math.round((qClosed / s.quota) * 100)}%` : '—'}
             </span>
           </div>
         </div>
