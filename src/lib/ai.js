@@ -1,19 +1,18 @@
 // ── Anthropic API ──────────────────────────────────────────────
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a sales pipeline inspector. Produce structured output only — no prose, no headers, no intro.
+export const DEFAULT_SYSTEM_PROMPT = `You are a sales coach reviewing next steps on open opportunities. Produce structured output only — no prose, no headers, no intro.
 
-For each deal that needs action, output one line:
-DEAL: {exact deal name} | ACTION: {one sentence, max 12 words, starts with a verb}
+For each deal where the next step is missing, vague, or weak, output one line:
+DEAL: {exact deal name} | ACTION: {improved next step, max 12 words, starts with a verb}
 
 After all deal lines, output one summary line:
-SUMMARY: {one sentence on this rep's overall pipeline health}
+SUMMARY: {one sentence on this rep's next-step discipline}
 
 Rules:
-- Only include deals that need AE action — skip clean deals
-- ACTION must be specific, AE-owned, and forward-looking (not "follow up")
-- Do NOT re-flag rule-based issues — add qualitative judgment only
-- Start each ACTION with a verb: Confirm, Schedule, Get, Push, Clarify, Align, Close, etc.
-- If all deals are clean, output only: SUMMARY: Pipeline is well-maintained with no critical issues.`
+- Only include deals where the next step needs improvement — skip strong, specific ones
+- ACTION must be concrete, AE-owned, and specific (not "follow up" or "check in")
+- Start each ACTION with a verb: Confirm, Schedule, Get, Send, Clarify, Align, Close, etc.
+- If all next steps are strong, output only: SUMMARY: Next steps are well-maintained and specific.`
 
 export const DEFAULT_COACHING_FOCUS = ''
 
@@ -58,13 +57,14 @@ export async function fetchAISummary({
   coachingFocus = '',
   signal,
 }) {
-  const focusLine = coachingFocus ? `\n\nAdditional focus: ${coachingFocus}` : ''
-  const dealLines = deals.map(d => {
-    const flags = (d._flags || []).map(f => `[${f.sev.toUpperCase()}] ${f.label}`).join(', ')
-    return `- ${d.f_opp_name || 'Unknown'} | ${d.f_fc_cat_norm || ''} | $${Math.round(d.f_amount_num || 0).toLocaleString()} | Stage: ${d.f_stage || '—'} | Next step: ${d.f_next_step || '—'} | Flags: ${flags || 'none'}`
-  }).join('\n')
+  const focusLine = coachingFocus ? `\n\nAdditional coaching focus: ${coachingFocus}` : ''
+  // Only commit/probable/upside — skip pipeline (too early to have meaningful next steps)
+  const actionableDeals = deals.filter(d => ['commit', 'probable', 'upside'].includes(d.f_fc_cat_norm))
+  const dealLines = actionableDeals.map(d =>
+    `- ${d.f_opp_name || 'Unknown'}: ${d.f_next_step?.trim() || '(no next step)'}`
+  ).join('\n')
 
-  const userMsg = `AE: ${owner}\nDeals (${deals.length}):\n${dealLines}${focusLine}`
+  const userMsg = `AE: ${owner}\nOpportunities (${actionableDeals.length}):\n${dealLines}${focusLine}`
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

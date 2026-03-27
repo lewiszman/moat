@@ -558,13 +558,10 @@ export default function Inspector() {
 
     let started = false
     try {
-      const active = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+      const active = importedData
+        .filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+        .map(d => ({ ...d, _owner: d.f_owner || 'Unknown', _flags: flagDeal(d) }))
       console.log('[Inspector] active deals:', active.length, 'of', importedData.length)
-
-      active.forEach(d => {
-        d._owner = d.f_owner || 'Unknown'
-        d._flags = flagDeal(d)
-      })
 
       const allFlags   = active.flatMap(d => d._flags)
       const critCount  = allFlags.filter(f => f.sev === 'critical').length
