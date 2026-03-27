@@ -369,7 +369,10 @@ export default function Inspector() {
     insp.startRun(null)
     sorted.forEach(([owner]) => insp.setRepLoading(owner))
 
-    if (!apiKey) return
+    if (!apiKey) {
+      insp.finishRun({ repsSorted: sorted, active: activeDeals, runDate: new Date() })
+      return
+    }
 
     const ac = new AbortController()
     abortRef.current = ac
