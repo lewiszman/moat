@@ -66,7 +66,7 @@ export default function App() {
     const today = new Date()
     if (today.getDay() === 1) {
       const fs = useForecastStore.getState()
-      const qInfo = getFiscalQuarterInfo(fs.qMode || 'current', fs.fyStartMonth || 1)
+      const qInfo = getFiscalQuarterInfo('current', fs.fyStartMonth || 1)
       const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
       const weekInQ = Math.floor((today - qStartDate) / (7 * 86400000)) + 1
       const wowState = useWowStore.getState()

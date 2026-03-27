@@ -66,10 +66,9 @@ const BOTTOM_ITEMS = [
 
 // Detect Q-End: <= 5 selling days remaining
 function useQEnd() {
-  const qMode   = useForecastStore(s => s.qMode)
   const fyStart = useForecastStore(s => s.fyStartMonth) || 1
-  const qInfo   = getFiscalQuarterInfo(qMode, fyStart)
-  if (qMode !== 'current' || !qInfo.qEndDate) return false
+  const qInfo   = getFiscalQuarterInfo('current', fyStart)
+  if (!qInfo.qEndDate) return false
   const now = new Date()
   const days = sellDaysRemaining(now, qInfo.qEndDate)
   return days <= 5

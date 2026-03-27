@@ -21,7 +21,7 @@ export default function PdfRoot() {
     { label: 'Upside forecast',  value: d.fc_up     || 0,  color: '#b45309' },
   ]
 
-  const qInfo = getFiscalQuarterInfo(s.qMode, s.fyStartMonth || 1)
+  const qInfo = getFiscalQuarterInfo('current', s.fyStartMonth || 1)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   const ROWS = [

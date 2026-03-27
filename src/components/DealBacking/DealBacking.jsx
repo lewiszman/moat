@@ -3,10 +3,10 @@ import { useForecastStore, useDealBackStore } from '../../store/forecastStore'
 import { fmt } from '../../lib/fmt'
 
 const COLS = [
-  { key: 'commit',   label: 'Commit',   accent: '#1a56db', sub: 'Counting on these to close' },
-  { key: 'probable', label: 'Probable', accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
-  { key: 'upside',   label: 'Upside',   accent: '#b45309', sub: 'Possible if things break right' },
-  { key: 'bench',    label: 'Bench',    accent: '#9ca3af', sub: 'Not counting this quarter' },
+  { key: 'commit',   label: 'Deal-Backed Commit',   accent: '#1a56db', sub: 'Counting on these to close' },
+  { key: 'probable', label: 'Deal-Backed Probable', accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
+  { key: 'upside',   label: 'Deal-Backed Upside',   accent: '#b45309', sub: 'Possible if things break right' },
+  { key: 'bench',    label: 'Bench',                accent: '#9ca3af', sub: 'Not counting this quarter' },
 ]
 
 const CAT_PILL = {
@@ -19,8 +19,8 @@ const CAT_PILL = {
 }
 
 function defaultCol(deal) {
-  const map = { closed: 'closed', commit: 'commit', probable: 'probable', upside: 'upside', pipeline: 'upside' }
-  return map[deal.cat] || 'upside'
+  const map = { closed: 'closed', commit: 'commit', probable: 'probable', upside: 'upside', pipeline: 'bench' }
+  return map[deal.cat] || 'bench'
 }
 
 function DealCard({ deal, onDragStart, onDragEnd, isMoved }) {
@@ -153,9 +153,9 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
   }
 
   const wfBands = {
-    commit:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ Commit deals', amt: totals.commit, color: '#1a56db' }],
-    probable: [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ Commit deals', amt: totals.commit, color: '#1a56db' }, { label: '+ Probable deals', amt: totals.probable, color: '#0d7c3d' }],
-    upside:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ Commit deals', amt: totals.commit, color: '#1a56db' }, { label: '+ Probable deals', amt: totals.probable, color: '#0d7c3d' }, { label: '+ Upside deals', amt: totals.upside, color: '#b45309' }],
+    commit:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }],
+    probable: [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }, { label: '+ DB Probable', amt: totals.probable, color: '#0d7c3d' }],
+    upside:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }, { label: '+ DB Probable', amt: totals.probable, color: '#0d7c3d' }, { label: '+ DB Upside', amt: totals.upside, color: '#b45309' }],
   }
 
   const bands    = wfBands[col.key]
@@ -342,9 +342,9 @@ export default function DealBacking() {
           {[
             { label: 'Quota',       val: fmt(quota),       color: '' },
             { label: 'Closed Won',  val: fmt(closedAmt),   color: 'text-green-600' },
-            { label: 'Commit FC',   val: fmt(cumC),        color: 'text-blue-600' },
-            { label: 'Probable FC', val: fmt(cumP),        color: 'text-green-700' },
-            { label: 'Upside FC',   val: fmt(cumU),        color: 'text-amber-700' },
+            { label: 'DB Commit FC',   val: fmt(cumC),        color: 'text-blue-600' },
+            { label: 'DB Probable FC', val: fmt(cumP),        color: 'text-green-700' },
+            { label: 'DB Upside FC',   val: fmt(cumU),        color: 'text-amber-700' },
             { label: 'Benched',     val: fmt(totals.bench), color: 'text-gray-500' },
           ].map((s, i) => (
             <React.Fragment key={s.label}>

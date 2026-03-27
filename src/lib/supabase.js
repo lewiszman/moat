@@ -36,8 +36,6 @@ export function extractSnapshot(state) {
     managerName: state.managerName,
     managerTeam: state.managerTeam,
     quarterLabel: state.quarterLabel,
-    qMode: state.qMode,
-    stateByMode: state.stateByMode,
     monthUnlocked: state.monthUnlocked,
     quota: state.quota,
     closed: state.closed,

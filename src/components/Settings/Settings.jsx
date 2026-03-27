@@ -68,7 +68,8 @@ function GeneralTab() {
         <Row label="Report URL" sub="Used for the 'Open in Salesforce' link">
           <input
             className="w-72 text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
-            defaultValue="https://remote-com.lightning.force.com/lightning/r/Report/00OSh000002mFV3MAM/view"
+            value={s.sfdcUrl || ''}
+            onChange={e => s.setField('sfdcUrl', e.target.value)}
             placeholder="https://..."
           />
         </Row>
@@ -362,9 +363,21 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
-    version: 'v2.8',
+    version: 'v2.9',
     date: 'Mar 2026',
     current: true,
+    items: [
+      ['Q+1 mode removed', 'Forecast inputs, snapshots, and tracker are current quarter only; quarter label remains manually editable'],
+      ['Deal-Backing columns renamed', 'Deal-Backed Commit, Deal-Backed Probable, Deal-Backed Upside for clearer distinction from Manager View tiers'],
+      ['Pipeline deals default to Bench', 'Newly loaded pipeline-category deals start in Bench in Deal-Backing; drag to include in forecast'],
+      ['Weekly snapshots with monthly data', 'M1/M2/M3 breakdown by tier (closed/commit/probable/upside) saved in each snapshot for future drill-down and export'],
+      ['SFDC quick-link', 'External link button beside Import CSV opens the configured pipeline report URL in Salesforce'],
+    ],
+  },
+  {
+    version: 'v2.8',
+    date: 'Mar 2026',
+    current: false,
     items: [
       ['Forecast arithmetic', 'C&C moves to Commit FC; C&C bookings prorated by weeks remaining in quarter (denominator: quarter weeks − 2)'],
       ['Week-over-week tracker', 'Auto-snapshot every Monday + manual snapshots; variance deltas per forecast tier; Week 2 and Week 10 accuracy badges resolve at quarter end when actual closed is entered'],

@@ -3,7 +3,7 @@ import { useForecastStore } from '../../store/forecastStore'
 
 // Fields encoded into the share URL
 const SHARE_FIELDS = [
-  'managerName', 'managerTeam', 'quarterLabel', 'qMode',
+  'managerName', 'managerTeam', 'quarterLabel',
   'quota', 'closed', 'probIncludesUpside',
   'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
   'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',

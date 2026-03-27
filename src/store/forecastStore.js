@@ -19,21 +19,6 @@ const DEFAULT_MONTHLY = {
   m3_closed: 0, m3_commit: 0, m3_prob: 0, m3_up: 0,
 }
 
-// Fields that are isolated per qMode (snapshot/restore on switch)
-const ISOLATED_FIELDS = [
-  'quota', 'closed', 'probIncludesUpside',
-  'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
-  'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',
-  'cnc_opps', 'cnc_asp',
-  'm1_closed', 'm1_commit', 'm1_prob', 'm1_up',
-  'm2_closed', 'm2_commit', 'm2_prob', 'm2_up',
-  'm3_closed', 'm3_commit', 'm3_prob', 'm3_up',
-]
-
-const DEFAULT_ISOLATED = {
-  quota: 0, closed: 0, probIncludesUpside: false,
-  ...DEFAULT_RATES, ...DEFAULT_PIPELINE, ...DEFAULT_CNC, ...DEFAULT_MONTHLY,
-}
 
 function computeDerived(s) {
   const bk_c  = s.pipe_commit * (s.r_commit / 100)
@@ -44,18 +29,13 @@ function computeDerived(s) {
   const cnc_rev  = cnc_pipe   * (s.r_cnc    / 100)
 
   // Weeks proration for C&C
-  const qInfo = getFiscalQuarterInfo(s.qMode || 'current', s.fyStartMonth || 1)
+  const qInfo = getFiscalQuarterInfo('current', s.fyStartMonth || 1)
   const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
   const calWeeks = Math.round((qInfo.qEndDate - qStartDate) / (7 * 24 * 3600 * 1000))
   const weeks_total = Math.max(1, calWeeks - 2)
-  let weeks_remaining
-  if (s.qMode === 'next') {
-    weeks_remaining = weeks_total
-  } else {
-    const today = new Date()
-    const sellDays = sellDaysRemaining(today, qInfo.qEndDate)
-    weeks_remaining = Math.max(0, Math.ceil(sellDays / 5))
-  }
+  const today = new Date()
+  const sellDays = sellDaysRemaining(today, qInfo.qEndDate)
+  const weeks_remaining = Math.max(0, Math.ceil(sellDays / 5))
   const cnc_prorated = cnc_rev * (weeks_remaining / weeks_total)
 
   const { fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob } = calcForecast({
@@ -74,14 +54,11 @@ export const useForecastStore = create(
       managerTeam: '',
       quarterLabel: '',
 
-      // Quarter mode
-      qMode: 'current', // 'current' | 'next'
-
-      // Per-mode isolated state snapshots
-      stateByMode: { current: null, next: null },
-
       // Monthly unlock overrides (true = manually unlocked past month)
       monthUnlocked: { m1: false, m2: false, m3: false },
+
+      // SFDC report URL (used for quick-link button in Manager View)
+      sfdcUrl: '',
 
       // Core inputs
       quota: 0,
@@ -124,25 +101,6 @@ export const useForecastStore = create(
       toggleProbUpside: () => set(s => {
         s.probIncludesUpside = !s.probIncludesUpside
         s.derived = computeDerived(s)
-      }),
-
-      // ── CQ / Q+1 isolated state ──
-      setQMode: (mode) => set(s => {
-        if (mode === s.qMode) return
-        // Snapshot current mode's inputs
-        const snap = {}
-        ISOLATED_FIELDS.forEach(k => { snap[k] = s[k] })
-        s.stateByMode[s.qMode] = snap
-        // Restore target mode (or defaults if never visited)
-        const restore = s.stateByMode[mode]
-        if (restore) {
-          ISOLATED_FIELDS.forEach(k => { s[k] = restore[k] })
-        } else {
-          ISOLATED_FIELDS.forEach(k => { s[k] = DEFAULT_ISOLATED[k] })
-        }
-        s.qMode = mode
-        s.derived = computeDerived(s)
-        s.monthUnlocked = { m1: false, m2: false, m3: false }
       }),
 
       setActiveView: (view) => set(s => { s.activeView = view }),
@@ -228,9 +186,8 @@ export const useForecastStore = create(
         managerName: s.managerName,
         managerTeam: s.managerTeam,
         quarterLabel: s.quarterLabel,
-        qMode: s.qMode,
-        stateByMode: s.stateByMode,
         monthUnlocked: s.monthUnlocked,
+        sfdcUrl: s.sfdcUrl,
         quota: s.quota,
         closed: s.closed,
         r_commit: s.r_commit, r_prob: s.r_prob, r_up: s.r_up,
@@ -428,7 +385,7 @@ export const useWowStore = create(
         const fs = useForecastStore.getState()
         const d = fs.derived || {}
         const now = new Date()
-        const qInfo = getFiscalQuarterInfo(fs.qMode || 'current', fs.fyStartMonth || 1)
+        const qInfo = getFiscalQuarterInfo('current', fs.fyStartMonth || 1)
         const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
         const weekInQ = Math.floor((now - qStartDate) / (7 * 86400000)) + 1
         s.snapshots.push({
@@ -442,6 +399,11 @@ export const useWowStore = create(
           fc_upside:   d.fc_up       || 0,
           pipeline:    (fs.pipe_commit || 0) + (fs.pipe_prob || 0) + (fs.pipe_up || 0) + (fs.pipe_pipe || 0),
           closed:      fs.closed     || 0,
+          monthly: {
+            m1: { closed: fs.m1_closed || 0, commit: fs.m1_commit || 0, probable: fs.m1_prob || 0, upside: fs.m1_up || 0 },
+            m2: { closed: fs.m2_closed || 0, commit: fs.m2_commit || 0, probable: fs.m2_prob || 0, upside: fs.m2_up || 0 },
+            m3: { closed: fs.m3_closed || 0, commit: fs.m3_commit || 0, probable: fs.m3_prob || 0, upside: fs.m3_up || 0 },
+          },
         })
       }),
 

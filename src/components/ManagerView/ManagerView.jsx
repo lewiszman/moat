@@ -71,14 +71,6 @@ export default function ManagerView() {
         />
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Import */}
-          <button onClick={() => setImportOpen(true)} className="btn text-[11px] flex items-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M6 1v7M3 5l3 3 3-3M1 10h10"/>
-            </svg>
-            {s.importMeta ? 'Re-import' : 'Import CSV'}
-          </button>
-
           {/* Share */}
           <button
             onClick={() => setShareOpen(true)}
@@ -104,15 +96,28 @@ export default function ManagerView() {
             PDF
           </button>
 
-          {/* CQ / Q+1 toggle */}
-          <div className="flex rounded-lg overflow-hidden border border-[var(--bdr2)]">
-            {['current', 'next'].map(mode => (
-              <button key={mode} onClick={() => s.setQMode(mode)}
-                className={`px-3 py-1 text-[11px] font-[700] cursor-pointer border-none transition-colors ${s.qMode === mode ? 'bg-[var(--blue)] text-white' : 'bg-[var(--bg)] text-[var(--tx2)] hover:bg-[var(--bg2)]'}`}>
-                {mode === 'current' ? 'CQ' : 'Q+1'}
-              </button>
-            ))}
-          </div>
+          {/* SFDC quick link */}
+          <button
+            onClick={() => s.sfdcUrl && window.open(s.sfdcUrl, '_blank')}
+            disabled={!s.sfdcUrl}
+            title={s.sfdcUrl ? 'Open pipeline report in Salesforce' : 'Set your SFDC report URL in Settings'}
+            className="btn text-[11px] flex items-center gap-1.5"
+          >
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4.5 1H1.5A.5.5 0 0 0 1 1.5v8A.5.5 0 0 0 1.5 10h8a.5.5 0 0 0 .5-.5V6.5"/>
+              <path d="M6.5 1H10v3.5"/>
+              <line x1="10" y1="1" x2="5" y2="6"/>
+            </svg>
+            SFDC
+          </button>
+
+          {/* Import */}
+          <button onClick={() => setImportOpen(true)} className="btn text-[11px] flex items-center gap-1.5">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 1v7M3 5l3 3 3-3M1 10h10"/>
+            </svg>
+            {s.importMeta ? 'Re-import' : 'Import CSV'}
+          </button>
         </div>
       </div>
 

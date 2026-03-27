@@ -4,8 +4,8 @@ import { parseMoney, getFiscalQuarterInfo } from '../../lib/fmt'
 
 // ── Month metadata ──────────────────────────────────────────────
 
-function getQuarterMonths(qMode, fyStartMonth) {
-  const info = getFiscalQuarterInfo(qMode, fyStartMonth)
+function getQuarterMonths(fyStartMonth) {
+  const info = getFiscalQuarterInfo('current', fyStartMonth)
   const now  = new Date()
   now.setHours(0, 0, 0, 0)
 
@@ -65,16 +65,13 @@ const COL = '120px repeat(3, 1fr) 100px'
 
 export default function MonthlyBreakdown() {
   const s        = useForecastStore()
-  const qMode    = s.qMode
   const fyStart  = s.fyStartMonth || 1
   const unlocked = s.monthUnlocked || { m1: false, m2: false, m3: false }
 
-  const months = useMemo(() => getQuarterMonths(qMode, fyStart), [qMode, fyStart])
+  const months = useMemo(() => getQuarterMonths(fyStart), [fyStart])
 
   // Past months lock ALL rows to actuals (only closed matters once month ends).
-  // In Q+1 mode nothing is locked yet.
   function isPastLocked(m) {
-    if (qMode === 'next') return false
     return m.isPast && !unlocked[m.key]
   }
 
@@ -113,7 +110,7 @@ export default function MonthlyBreakdown() {
               )}
             </div>
             {/* Lock / unlock toggle — only relevant for CQ past months */}
-            {qMode === 'current' && m.isPast && (
+            {m.isPast && (
               isPastLocked(m) ? (
                 <button
                   onClick={() => s.toggleMonthLock(m.key)}
@@ -218,7 +215,7 @@ export default function MonthlyBreakdown() {
             const pct     = quotaPace > 0 ? (actual / quotaPace) * 100 : 0
             const locked  = isPastLocked(m)
             // Only show pace for past months with actuals, or current month
-            if (!locked && !m.isCurrent && qMode === 'current') {
+            if (!locked && !m.isCurrent) {
               return <div key={m.key} className="px-3 py-2 text-[10px] text-[var(--tx2)]">—</div>
             }
             const color = pct >= 100 ? 'var(--green)' : pct >= 80 ? 'var(--amber)' : 'var(--coral)'

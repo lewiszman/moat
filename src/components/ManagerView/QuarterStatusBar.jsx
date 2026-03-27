@@ -3,18 +3,15 @@ import { useForecastStore } from '../../store/forecastStore'
 import { getFiscalQuarterInfo, sellDaysRemaining, getWeekNumber } from '../../lib/fmt'
 
 export default function QuarterStatusBar() {
-  const qMode      = useForecastStore(s => s.qMode)
   const fyStart    = useForecastStore(s => s.fyStartMonth) || 1
   const quota      = useForecastStore(s => s.quota) || 0
 
   const info = useMemo(() => {
     const now     = new Date()
-    const qInfo   = getFiscalQuarterInfo(qMode, fyStart)
+    const qInfo   = getFiscalQuarterInfo('current', fyStart)
     const weekNum = getWeekNumber(now)
 
-    const daysLeft = qMode === 'current'
-      ? sellDaysRemaining(now, qInfo.qEndDate)
-      : null
+    const daysLeft = sellDaysRemaining(now, qInfo.qEndDate)
 
     // Q end date formatted
     const qEndStr = qInfo.qEndDate
@@ -27,17 +24,15 @@ export default function QuarterStatusBar() {
 
     // Elapsed selling days as a % (approximate: assume 65 total selling days in a quarter)
     const TOTAL_SELL_DAYS = 65
-    const elapsed = daysLeft !== null ? Math.max(0, TOTAL_SELL_DAYS - daysLeft) : null
-    const elapsedPct = elapsed !== null ? Math.min(100, Math.round((elapsed / TOTAL_SELL_DAYS) * 100)) : null
+    const elapsed = Math.max(0, TOTAL_SELL_DAYS - daysLeft)
+    const elapsedPct = Math.min(100, Math.round((elapsed / TOTAL_SELL_DAYS) * 100))
 
     return { ...qInfo, weekNum, daysLeft, qEndStr, dateStr, elapsedPct }
-  }, [qMode, fyStart])
+  }, [fyStart])
 
-  const urgency = info.daysLeft !== null
-    ? info.daysLeft <= 5  ? 'critical'
-    : info.daysLeft <= 15 ? 'warn'
-    : 'ok'
-    : null
+  const urgency = info.daysLeft <= 5  ? 'critical'
+                : info.daysLeft <= 15 ? 'warn'
+                : 'ok'
 
   const urgencyColor = {
     critical: 'text-red-600',
@@ -56,11 +51,6 @@ export default function QuarterStatusBar() {
         >
           {info.label}
         </div>
-        {qMode === 'next' && (
-          <span className="text-[9px] font-[700] uppercase tracking-wide px-1.5 py-px rounded bg-purple-100 text-purple-600">
-            Planning
-          </span>
-        )}
       </div>
 
       <span className="text-[var(--bdr2)] select-none">·</span>
@@ -82,31 +72,27 @@ export default function QuarterStatusBar() {
       )}
 
       {/* Selling days */}
-      {info.daysLeft !== null && (
-        <>
-          <span className="text-[var(--bdr2)] select-none">·</span>
-          <span className={`text-[11px] font-[700] ${urgencyColor[urgency]}`}>
-            {urgency === 'critical' && '🔥 '}
-            {info.daysLeft} selling day{info.daysLeft !== 1 ? 's' : ''} left
-          </span>
-        </>
-      )}
+      <>
+        <span className="text-[var(--bdr2)] select-none">·</span>
+        <span className={`text-[11px] font-[700] ${urgencyColor[urgency]}`}>
+          {urgency === 'critical' && '🔥 '}
+          {info.daysLeft} selling day{info.daysLeft !== 1 ? 's' : ''} left
+        </span>
+      </>
 
       {/* Progress bar */}
-      {info.elapsedPct !== null && (
-        <div className="flex items-center gap-1.5 ml-auto">
-          <div className="w-24 h-1.5 bg-[var(--bg3)] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${info.elapsedPct}%`,
-                background: urgency === 'critical' ? '#dc2626' : urgency === 'warn' ? '#b45309' : '#1a56db',
-              }}
-            />
-          </div>
-          <span className="text-[9px] text-[var(--tx2)]">{info.elapsedPct}% elapsed</span>
+      <div className="flex items-center gap-1.5 ml-auto">
+        <div className="w-24 h-1.5 bg-[var(--bg3)] rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${info.elapsedPct}%`,
+              background: urgency === 'critical' ? '#dc2626' : urgency === 'warn' ? '#b45309' : '#1a56db',
+            }}
+          />
         </div>
-      )}
+        <span className="text-[9px] text-[var(--tx2)]">{info.elapsedPct}% elapsed</span>
+      </div>
     </div>
   )
 }
