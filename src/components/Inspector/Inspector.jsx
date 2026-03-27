@@ -502,7 +502,8 @@ export default function Inspector() {
   })
   const abortRef = useRef(null)
   const slackRef = useRef(null)
-  const [runError, setRunError] = React.useState(null)
+  const [runError,      setRunError]      = React.useState(null)
+  const [localRunning,  setLocalRunning]  = React.useState(false)
 
   // Effective column visibility — aiaction auto-shows when AI is on
   const effectiveCols = useMemo(() => ({
@@ -537,13 +538,29 @@ export default function Inspector() {
   const repsTotal      = repsSorted.length
 
   // ── Run ──
+  // Uses getState() so we always read fresh store values at call-time,
+  // avoiding stale-closure issues caused by `insp` being in deps.
   const run = useCallback(async () => {
+    console.log('[Inspector] run called, importedData length:', importedData?.length)
     if (!importedData?.length) return
+
     setRunError(null)
+    setLocalRunning(true)
+
+    // Read volatile inspector state fresh at call-time
+    const st = useInspectorStore.getState()
+    const runApiKey    = st.apiKey
+    const runAiActive  = st.aiEnabled && !!runApiKey
+    const runPrompt    = st.systemPrompt || DEFAULT_SYSTEM_PROMPT
+    const runFocus     = st.coachingFocus
+
+    console.log('[Inspector] aiEnabled:', st.aiEnabled, 'apiKey set:', !!runApiKey, 'aiActive:', runAiActive)
 
     let started = false
     try {
       const active = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+      console.log('[Inspector] active deals:', active.length, 'of', importedData.length)
+
       active.forEach(d => {
         d._owner = d.f_owner || 'Unknown'
         d._flags = flagDeal(d)
@@ -570,46 +587,57 @@ export default function Inspector() {
         crit: critCount, warn: warnCount, aesWithCrit,
       })
 
-      insp.startRun(null)
-      started = true
-      sorted.forEach(([owner]) => insp.setRepLoading(owner))
+      // Use getState() for actions — they are stable references regardless
+      const { startRun, finishRun, stopRun: storeStop,
+              setRepLoading, setRepResult, setRepError: storeRepError,
+              logUsage } = useInspectorStore.getState()
 
-      if (!aiActive) {
-        insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
+      startRun(null)
+      started = true
+      sorted.forEach(([owner]) => setRepLoading(owner))
+
+      if (!runAiActive) {
+        finishRun({ repsSorted: sorted, active, runDate: new Date() })
         return
       }
 
       const ac = new AbortController()
       abortRef.current = ac
-      insp.startRun(ac)
+      startRun(ac)
 
       let totalIn = 0, totalOut = 0
       for (const [owner, deals] of sorted) {
         if (ac.signal.aborted) break
         try {
           const result = await fetchAISummary({
-            owner, deals, apiKey,
-            systemPrompt, coachingFocus: insp.coachingFocus, signal: ac.signal,
+            owner, deals, apiKey: runApiKey,
+            systemPrompt: runPrompt, coachingFocus: runFocus, signal: ac.signal,
           })
-          insp.setRepResult(owner, { summary: result.summary, actions: result.actions })
+          setRepResult(owner, { summary: result.summary, actions: result.actions })
           totalIn  += result.inputTokens
           totalOut += result.outputTokens
         } catch (err) {
           if (err.name === 'AbortError') break
-          insp.setRepError(owner, err.message)
+          storeRepError(owner, err.message)
         }
       }
 
-      insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
-      insp.logUsage(totalIn, totalOut, sorted.length, active.length)
+      finishRun({ repsSorted: sorted, active, runDate: new Date() })
+      logUsage(totalIn, totalOut, sorted.length, active.length)
     } catch (err) {
       console.error('[Inspector] run failed:', err)
-      setRunError(err.message || 'Unexpected error — check console')
-      if (started) insp.stopRun()
+      setRunError(err.message || 'Unexpected error — check the browser console')
+      if (started) useInspectorStore.getState().stopRun()
+    } finally {
+      setLocalRunning(false)
     }
-  }, [importedData, apiKey, aiActive, systemPrompt, insp])
+  }, [importedData])  // importedData is the only dep that changes the logic
 
-  const stop = () => { abortRef.current?.abort(); insp.stopRun() }
+  const stop = () => {
+    abortRef.current?.abort()
+    useInspectorStore.getState().stopRun()
+    setLocalRunning(false)
+  }
 
   // ── Copy Slack ──
   const copySlack = async (mode) => {
@@ -662,11 +690,11 @@ export default function Inspector() {
       {/* ── Toolbar row 1: actions ── */}
       <div className="flex items-center gap-2 flex-wrap mb-2">
         {/* Run / Stop */}
-        <button onClick={run} disabled={insp.isRunning} className="btn btn-primary flex items-center gap-1.5 text-[12px]">
+        <button onClick={run} disabled={localRunning || insp.isRunning} className="btn btn-primary flex items-center gap-1.5 text-[12px]">
           <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><polygon points="2,1 10,5 2,9"/></svg>
-          Run
+          {localRunning ? 'Running…' : 'Run'}
         </button>
-        {insp.isRunning && (
+        {(localRunning || insp.isRunning) && (
           <button onClick={stop} className="btn flex items-center gap-1.5 text-[12px]">
             <svg width="9" height="9" viewBox="0 0 9 9" fill="currentColor"><rect x="1" y="1" width="7" height="7" rx="1"/></svg>
             Stop
