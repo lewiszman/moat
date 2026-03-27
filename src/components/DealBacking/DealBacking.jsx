@@ -54,9 +54,103 @@ function DealCard({ deal, onDragStart, onDragEnd, isMoved }) {
   )
 }
 
-function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop, onDragStart, onDragEnd, positions }) {
-  const colAmt = deals.reduce((s, d) => s + d.acv, 0)
-  const cumTotals = { commit: closed + totals.commit, probable: closed + totals.commit + totals.probable, upside: closed + totals.commit + totals.probable + totals.upside }
+function CncCard({ onDragStart, onDragEnd, cncOverrides, setCncOverride, clearCncOverrides, localOpps, localAsp, localRate, localAcv, weeks_remaining, weeks_total }) {
+  const hasOverride = cncOverrides.opps !== null || cncOverrides.asp !== null || cncOverrides.rate !== null
+
+  return (
+    <div
+      draggable
+      onDragStart={e => onDragStart(e, 'cnc_synthetic')}
+      onDragEnd={onDragEnd}
+      className="
+        relative bg-[var(--bg)] border-2 rounded-[var(--rm)]
+        px-3 py-2.5 cursor-grab active:cursor-grabbing select-none
+        hover:shadow-sm transition-all duration-100
+      "
+      style={{ borderColor: 'var(--green)' }}
+    >
+      {/* C&C badge */}
+      <span
+        className="absolute top-1.5 right-1.5 text-[9px] font-[700] px-1.5 py-0.5 rounded-full text-white"
+        style={{ background: 'var(--coral, #f97316)' }}
+      >
+        C&amp;C
+      </span>
+
+      <div className="text-[12px] font-[600] text-[var(--tx)] mb-1 pr-8">Create &amp; Close</div>
+      <div className="text-[15px] font-[700] mb-0.5" style={{ color: 'var(--green)' }}>{fmt(localAcv)}</div>
+      <div className="text-[10px] text-[var(--tx2)] mb-2">
+        prorated · {weeks_remaining} of {weeks_total} wks
+      </div>
+
+      {/* Editable fields */}
+      <div className="flex flex-col gap-1">
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-[var(--tx2)] w-16 flex-shrink-0"># Opps</span>
+          <input
+            type="number"
+            min={0}
+            value={localOpps}
+            onChange={e => setCncOverride('opps', +e.target.value)}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            className="w-12 text-right text-[11px] border border-[var(--bdr2)] rounded px-1 py-0.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--green)]"
+          />
+        </div>
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-[var(--tx2)] w-16 flex-shrink-0">Avg size</span>
+          <span className="text-[var(--tx2)] text-[10px]">$</span>
+          <input
+            type="number"
+            min={0}
+            step={500}
+            value={localAsp}
+            onChange={e => setCncOverride('asp', +e.target.value)}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            className="w-20 text-right text-[11px] border border-[var(--bdr2)] rounded px-1 py-0.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--green)]"
+          />
+        </div>
+        <div className="flex items-center gap-1 text-[11px]">
+          <span className="text-[var(--tx2)] w-16 flex-shrink-0">Win rate</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={localRate}
+            onChange={e => setCncOverride('rate', +e.target.value)}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            className="w-12 text-right text-[11px] border border-[var(--bdr2)] rounded px-1 py-0.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--green)]"
+          />
+          <span className="text-[var(--tx2)]">%</span>
+        </div>
+      </div>
+
+      {hasOverride && (
+        <button
+          onClick={e => { e.stopPropagation(); clearCncOverrides() }}
+          onMouseDown={e => e.stopPropagation()}
+          className="mt-1.5 text-[10px] cursor-pointer hover:underline"
+          style={{ color: 'var(--blue)' }}
+        >
+          ↺ use defaults
+        </button>
+      )}
+    </div>
+  )
+}
+
+function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop, onDragStart, onDragEnd, positions, cncCard, cncPos, cncBenchAcv }) {
+  const colDealAmt  = deals.reduce((s, d) => s + d.acv, 0)
+  const cncInThisCol = cncCard && cncPos === col.key
+  const colAmt = colDealAmt + (cncInThisCol ? cncCard.acv : 0)
+
+  const cumTotals = {
+    commit:   closed + totals.commit,
+    probable: closed + totals.commit + totals.probable,
+    upside:   closed + totals.commit + totals.probable + totals.upside,
+  }
 
   const wfBands = {
     commit:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ Commit deals', amt: totals.commit, color: '#1a56db' }],
@@ -64,8 +158,9 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
     upside:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ Commit deals', amt: totals.commit, color: '#1a56db' }, { label: '+ Probable deals', amt: totals.probable, color: '#0d7c3d' }, { label: '+ Upside deals', amt: totals.upside, color: '#b45309' }],
   }
 
-  const bands = wfBands[col.key]
+  const bands    = wfBands[col.key]
   const cumTotal = cumTotals[col.key]
+  const dealCount = deals.length + (cncInThisCol ? 1 : 0)
 
   return (
     <div className="flex flex-col min-w-0">
@@ -87,7 +182,7 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
             {col.key === 'bench' ? fmt(colAmt) : fmt(cumTotal)}
           </div>
           <div className="text-[11px] text-[var(--tx2)]">
-            {deals.length} deal{deals.length !== 1 ? 's' : ''}
+            {dealCount} deal{dealCount !== 1 ? 's' : ''}
             {col.key !== 'bench' && <> · <span className="opacity-70">{fmt(colAmt)}</span></>}
           </div>
         </div>
@@ -102,12 +197,18 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
                 <span className="font-[600] text-[var(--tx)]">{fmt(b.amt)}</span>
               </div>
             ))}
+            {/* C&C bench footnote */}
+            {cncPos === 'bench' && col.key !== 'bench' && (
+              <div className="text-[10px] text-[var(--tx2)] italic pt-0.5" style={{ borderTop: '1px dashed var(--bdr2)', marginTop: '2px', paddingTop: '4px' }}>
+                C&amp;C ({fmt(cncBenchAcv)}) in Bench — drag to include
+              </div>
+            )}
           </div>
         )}
 
         {/* Cards */}
         <div className="flex-1 p-2 flex flex-col gap-1.5 min-h-[120px]">
-          {deals.length === 0 && (
+          {deals.length === 0 && !cncInThisCol && (
             <div className="text-[11px] text-[var(--tx2)] italic text-center pt-4 opacity-60">
               {col.key === 'bench' ? 'Drag deals here to park them' : 'Drop deals here'}
             </div>
@@ -121,6 +222,21 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
               isMoved={positions[deal.id] && positions[deal.id] !== defaultCol(deal)}
             />
           ))}
+          {cncInThisCol && (
+            <CncCard
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              cncOverrides={cncCard.cncOverrides}
+              setCncOverride={cncCard.setCncOverride}
+              clearCncOverrides={cncCard.clearCncOverrides}
+              localOpps={cncCard.localOpps}
+              localAsp={cncCard.localAsp}
+              localRate={cncCard.localRate}
+              localAcv={cncCard.acv}
+              weeks_remaining={cncCard.weeks_remaining}
+              weeks_total={cncCard.weeks_total}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -128,11 +244,32 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
 }
 
 export default function DealBacking() {
-  const importedData = useForecastStore(s => s.importedData)
-  const quota = useForecastStore(s => s.quota)
-  const { positions, move, reset } = useDealBackStore()
-  const [dragId, setDragId] = React.useState(null)
+  const importedData    = useForecastStore(s => s.importedData)
+  const quota           = useForecastStore(s => s.quota)
+  const derived         = useForecastStore(s => s.derived)
+  const cnc_opps        = useForecastStore(s => s.cnc_opps)
+  const cnc_asp         = useForecastStore(s => s.cnc_asp)
+  const r_cnc           = useForecastStore(s => s.r_cnc)
+
+  const { positions, move, reset, cncOverrides, setCncOverride, clearCncOverrides } = useDealBackStore()
+  const [dragId, setDragId]     = React.useState(null)
   const [dragOver, setDragOver] = React.useState(null)
+
+  // C&C synthetic card values
+  const weeks_remaining = derived.weeks_remaining ?? 0
+  const weeks_total     = derived.weeks_total     ?? 1
+  const localOpps  = cncOverrides.opps ?? cnc_opps
+  const localAsp   = cncOverrides.asp  ?? cnc_asp
+  const localRate  = cncOverrides.rate ?? r_cnc
+  const cncAcv     = localOpps * localAsp * (localRate / 100) * (weeks_total > 0 ? weeks_remaining / weeks_total : 0)
+  const cncPos     = positions['cnc_synthetic'] || 'bench'
+
+  const cncCardData = {
+    acv: cncAcv,
+    localOpps, localAsp, localRate,
+    weeks_remaining, weeks_total,
+    cncOverrides, setCncOverride, clearCncOverrides,
+  }
 
   const deals = useMemo(() => {
     if (!importedData?.length) return []
@@ -157,11 +294,14 @@ export default function DealBacking() {
   }, [deals, positions])
 
   const closedAmt = deals.filter(d => d.closed).reduce((s, d) => s + d.acv, 0)
+
+  // Totals include C&C card
   const totals = { commit: 0, probable: 0, upside: 0, bench: 0 }
   deals.filter(d => !d.closed).forEach(d => {
     const col = effectivePositions[d.id] || 'upside'
     totals[col] = (totals[col] || 0) + d.acv
   })
+  totals[cncPos] = (totals[cncPos] || 0) + cncAcv
 
   const dealsByCol = (colKey) =>
     deals
@@ -172,7 +312,7 @@ export default function DealBacking() {
     setDragId(id)
     e.dataTransfer.effectAllowed = 'move'
   }
-  const handleDragEnd = () => { setDragId(null); setDragOver(null) }
+  const handleDragEnd  = () => { setDragId(null); setDragOver(null) }
   const handleDragOver = (col) => setDragOver(col)
   const handleDragLeave = () => setDragOver(null)
   const handleDrop = (e, col) => {
@@ -200,11 +340,11 @@ export default function DealBacking() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <div className="flex gap-3 flex-wrap flex-1">
           {[
-            { label: 'Quota',       val: fmt(quota),      color: '' },
-            { label: 'Closed Won',  val: fmt(closedAmt),  color: 'text-green-600' },
-            { label: 'Commit FC',   val: fmt(cumC),       color: 'text-blue-600' },
-            { label: 'Probable FC', val: fmt(cumP),       color: 'text-green-700' },
-            { label: 'Upside FC',   val: fmt(cumU),       color: 'text-amber-700' },
+            { label: 'Quota',       val: fmt(quota),       color: '' },
+            { label: 'Closed Won',  val: fmt(closedAmt),   color: 'text-green-600' },
+            { label: 'Commit FC',   val: fmt(cumC),        color: 'text-blue-600' },
+            { label: 'Probable FC', val: fmt(cumP),        color: 'text-green-700' },
+            { label: 'Upside FC',   val: fmt(cumU),        color: 'text-amber-700' },
             { label: 'Benched',     val: fmt(totals.bench), color: 'text-gray-500' },
           ].map((s, i) => (
             <React.Fragment key={s.label}>
@@ -234,6 +374,9 @@ export default function DealBacking() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             positions={effectivePositions}
+            cncCard={cncCardData}
+            cncPos={cncPos}
+            cncBenchAcv={cncAcv}
           />
         ))}
       </div>

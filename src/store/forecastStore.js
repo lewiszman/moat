@@ -393,11 +393,28 @@ export const useSectionComments = create(
 
 // ── Deal-Backing store ──────────────────────────────────────────
 export const useDealBackStore = create(
-  immer((set) => ({
-    positions: {},   // { [dealId]: 'commit' | 'probable' | 'upside' | 'bench' }
-    reset: () => set(s => { s.positions = {} }),
-    move: (id, col) => set(s => { s.positions[id] = col }),
-  }))
+  persist(
+    immer((set) => ({
+      positions: {},   // { [dealId]: 'commit' | 'probable' | 'upside' | 'bench' }
+      cncOverrides: { opps: null, asp: null, rate: null },
+
+      reset: () => set(s => {
+        s.positions = {}
+        s.cncOverrides = { opps: null, asp: null, rate: null }
+      }),
+      move: (id, col) => set(s => { s.positions[id] = col }),
+      setCncOverride: (key, value) => set(s => { s.cncOverrides[key] = value }),
+      clearCncOverrides: () => set(s => { s.cncOverrides = { opps: null, asp: null, rate: null } }),
+    })),
+    {
+      name: 'moat-deal-back-v27',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        positions: s.positions,
+        cncOverrides: s.cncOverrides,
+      }),
+    }
+  )
 )
 
 // ── Week-over-Week tracker store ────────────────────────────────

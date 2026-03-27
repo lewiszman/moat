@@ -305,12 +305,79 @@ function UsageTab() {
   )
 }
 
+// ── Feedback form ──────────────────────────────────────────────
+function FeedbackForm() {
+  const [type, setType]       = React.useState('Bug report')
+  const [message, setMessage] = React.useState('')
+  const [sent, setSent]       = React.useState(false)
+
+  const handleSend = () => {
+    if (!message.trim()) return
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
+    const body  = `${message}\n\n---\nVersion: v2.8 | ${today}`
+    const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
+    window.location.href = href
+    setSent(true)
+    setTimeout(() => setSent(false), 2000)
+  }
+
+  return (
+    <div className="mt-4 pt-4 border-t border-[var(--bdr2)]">
+      <div className="text-[12px] font-[600] text-[var(--tx)] mb-3">Send feedback</div>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <label className="text-[12px] text-[var(--tx2)] w-12 flex-shrink-0">Type</label>
+          <select
+            value={type}
+            onChange={e => setType(e.target.value)}
+            className="text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-2 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+          >
+            <option>Bug report</option>
+            <option>Feature request</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <textarea
+          value={message}
+          onChange={e => setMessage(e.target.value)}
+          placeholder="Describe the bug or feature request…"
+          rows={4}
+          className="w-full text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-2 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] resize-y"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSend}
+            disabled={!message.trim()}
+            className={`btn text-[11px] ${!message.trim() ? 'opacity-40 cursor-not-allowed' : 'btn-primary'}`}
+          >
+            Send feedback
+          </button>
+          {sent && <span className="text-[11px] text-[var(--tx2)]">Opening email client…</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
-    version: 'v2.7',
+    version: 'v2.8',
     date: 'Mar 2026',
     current: true,
+    items: [
+      ['Forecast arithmetic', 'C&C moves to Commit FC; C&C bookings prorated by weeks remaining in quarter (denominator: quarter weeks − 2)'],
+      ['Week-over-week tracker', 'Auto-snapshot every Monday + manual snapshots; variance deltas per forecast tier; Week 2 and Week 10 accuracy badges resolve at quarter end when actual closed is entered'],
+      ['Pipeline Inspector overhaul', 'Full-width table view; standardized flag library with typed IDs, consistent labels, severity weights; AI toggle (rules-only mode is first-class); exec and manager Slack copy'],
+      ['Deal-Backing C&C card', 'Persistent synthetic card defaulting from Manager View; editable overrides; prorated value; draggable to any column'],
+      ['Supabase session persistence', 'GitHub OAuth; auto-save + named snapshots; session history with restore; API key scoped per user, never leaves device'],
+      ['Author and feedback', 'About section updated; in-app feedback form'],
+    ],
+  },
+  {
+    version: 'v2.7',
+    date: 'Mar 2026',
+    current: false,
     items: [
       ['Monthly breakdown', 'M1/M2/M3 input table with past-month locking, linearity row, variance vs quota pace'],
       ['CQ/Q+1 isolated state', 'Switching between CQ and Q+1 saves and restores completely separate input sets'],
@@ -367,7 +434,8 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v2.7'],
+            ['Version', 'v2.8'],
+            ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],
           ].map(([k, v]) => (
@@ -377,6 +445,7 @@ function AboutTab() {
             </div>
           ))}
         </div>
+        <FeedbackForm />
       </Section>
 
       <Section title="Version history">

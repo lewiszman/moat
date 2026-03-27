@@ -502,6 +502,7 @@ export default function Inspector() {
   })
   const abortRef = useRef(null)
   const slackRef = useRef(null)
+  const [runError, setRunError] = React.useState(null)
 
   // Effective column visibility — aiaction auto-shows when AI is on
   const effectiveCols = useMemo(() => ({
@@ -538,65 +539,74 @@ export default function Inspector() {
   // ── Run ──
   const run = useCallback(async () => {
     if (!importedData?.length) return
+    setRunError(null)
 
-    const active = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
-    active.forEach(d => {
-      d._owner = d.f_owner || 'Unknown'
-      d._flags = flagDeal(d)
-    })
+    let started = false
+    try {
+      const active = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+      active.forEach(d => {
+        d._owner = d.f_owner || 'Unknown'
+        d._flags = flagDeal(d)
+      })
 
-    const allFlags   = active.flatMap(d => d._flags)
-    const critCount  = allFlags.filter(f => f.sev === 'critical').length
-    const warnCount  = allFlags.filter(f => f.sev === 'warn').length
-    const byRep      = groupByRep(active)
-    const sorted     = Object.entries(byRep).sort(([, a], [, b]) =>
-      b.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0) -
-      a.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0)
-    )
-    const aesWithCrit = sorted.filter(([, deals]) =>
-      deals.flatMap(d => d._flags).some(f => f.sev === 'critical')
-    ).length
+      const allFlags   = active.flatMap(d => d._flags)
+      const critCount  = allFlags.filter(f => f.sev === 'critical').length
+      const warnCount  = allFlags.filter(f => f.sev === 'warn').length
+      const byRep      = groupByRep(active)
+      const sorted     = Object.entries(byRep).sort(([, a], [, b]) =>
+        b.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0) -
+        a.flatMap(d => d._flags).reduce((s, f) => s + f.weight, 0)
+      )
+      const aesWithCrit = sorted.filter(([, deals]) =>
+        deals.flatMap(d => d._flags).some(f => f.sev === 'critical')
+      ).length
 
-    setAllDeals(active)
-    setRepsSorted(sorted)
-    setFilterAEs([]); setFilterCats([]); setFilterFlags([])
-    setStats({
-      aes: sorted.length, deals: active.length,
-      pipe: active.reduce((s, d) => s + d.f_amount_num, 0),
-      crit: critCount, warn: warnCount, aesWithCrit,
-    })
+      setAllDeals(active)
+      setRepsSorted(sorted)
+      setFilterAEs([]); setFilterCats([]); setFilterFlags([])
+      setStats({
+        aes: sorted.length, deals: active.length,
+        pipe: active.reduce((s, d) => s + d.f_amount_num, 0),
+        crit: critCount, warn: warnCount, aesWithCrit,
+      })
 
-    insp.startRun(null)
-    sorted.forEach(([owner]) => insp.setRepLoading(owner))
+      insp.startRun(null)
+      started = true
+      sorted.forEach(([owner]) => insp.setRepLoading(owner))
 
-    if (!aiActive) {
-      insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
-      return
-    }
-
-    const ac = new AbortController()
-    abortRef.current = ac
-    insp.startRun(ac)
-
-    let totalIn = 0, totalOut = 0
-    for (const [owner, deals] of sorted) {
-      if (ac.signal.aborted) break
-      try {
-        const result = await fetchAISummary({
-          owner, deals, apiKey,
-          systemPrompt, coachingFocus: insp.coachingFocus, signal: ac.signal,
-        })
-        insp.setRepResult(owner, { summary: result.summary, actions: result.actions })
-        totalIn  += result.inputTokens
-        totalOut += result.outputTokens
-      } catch (err) {
-        if (err.name === 'AbortError') break
-        insp.setRepError(owner, err.message)
+      if (!aiActive) {
+        insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
+        return
       }
-    }
 
-    insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
-    insp.logUsage(totalIn, totalOut, sorted.length, active.length)
+      const ac = new AbortController()
+      abortRef.current = ac
+      insp.startRun(ac)
+
+      let totalIn = 0, totalOut = 0
+      for (const [owner, deals] of sorted) {
+        if (ac.signal.aborted) break
+        try {
+          const result = await fetchAISummary({
+            owner, deals, apiKey,
+            systemPrompt, coachingFocus: insp.coachingFocus, signal: ac.signal,
+          })
+          insp.setRepResult(owner, { summary: result.summary, actions: result.actions })
+          totalIn  += result.inputTokens
+          totalOut += result.outputTokens
+        } catch (err) {
+          if (err.name === 'AbortError') break
+          insp.setRepError(owner, err.message)
+        }
+      }
+
+      insp.finishRun({ repsSorted: sorted, active, runDate: new Date() })
+      insp.logUsage(totalIn, totalOut, sorted.length, active.length)
+    } catch (err) {
+      console.error('[Inspector] run failed:', err)
+      setRunError(err.message || 'Unexpected error — check console')
+      if (started) insp.stopRun()
+    }
   }, [importedData, apiKey, aiActive, systemPrompt, insp])
 
   const stop = () => { abortRef.current?.abort(); insp.stopRun() }
@@ -786,6 +796,15 @@ export default function Inspector() {
             onChange={e => insp.setCoachingFocus(e.target.value)}
           />
           <button onClick={() => setFocusOpen(false)} className="btn text-[11px]">Done</button>
+        </div>
+      )}
+
+      {/* Run error */}
+      {runError && (
+        <div className="mb-2 px-3 py-2 text-[12px] text-red-600 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+          <span>⚠</span>
+          <span>Run failed: {runError}</span>
+          <button onClick={() => setRunError(null)} className="ml-auto text-[11px] underline cursor-pointer">Dismiss</button>
         </div>
       )}
 
