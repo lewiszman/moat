@@ -1,0 +1,146 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ── */
+:root {
+  --font: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  /* Surface */
+  --bg:   #ffffff;
+  --bg2:  #f9fafb;
+  --bg3:  #f3f4f6;
+
+  /* Text */
+  --tx:   #111827;
+  --tx2:  #6b7280;
+
+  /* Border */
+  --bdr:  1px solid #e5e7eb;
+  --bdr2: #e5e7eb;
+
+  /* Brand accents */
+  --blue:   #1a56db;
+  --green:  #0d7c3d;
+  --amber:  #b45309;
+  --red:    #dc2626;
+  --navy:   #1a1a2e;
+  --coral:  #E85D3A;
+
+  /* Radius */
+  --rm: 6px;
+  --rl: 10px;
+}
+
+html.dark {
+  --bg:   #111827;
+  --bg2:  #1f2937;
+  --bg3:  #374151;
+  --tx:   #f9fafb;
+  --tx2:  #9ca3af;
+  --bdr2: #374151;
+  --bdr:  1px solid #374151;
+}
+
+/* ── Base resets ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  color: var(--tx);
+  background: var(--bg2);
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+input, textarea, select, button {
+  font-family: var(--font);
+}
+
+/* ── Shared utility classes ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--rm);
+  border: var(--bdr);
+  background: var(--bg);
+  color: var(--tx2);
+  cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+  white-space: nowrap;
+}
+.btn:hover { background: var(--bg2); color: var(--tx); }
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  border-color: var(--blue);
+}
+.btn-primary:hover { background: #1648c0; border-color: #1648c0; color: #fff; }
+
+.card {
+  background: var(--bg);
+  border: var(--bdr);
+  border-radius: var(--rl);
+  overflow: hidden;
+}
+
+.sec-hd {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx2);
+  margin: 1.25rem 0 .625rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 20px;
+}
+
+/* ── Skeleton loader ── */
+.skeleton {
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Forecast card amount pulse ── */
+@keyframes fc-updated {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.fc-amount-updated { animation: fc-updated .35s ease-out; }
+
+/* ── Print styles ── */
+@media print {
+  @page { size: letter; margin: 14mm 16mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .no-print, nav, header { display: none !important; }
+  body[data-printing="forecast"] #pdf-root { display: block !important; }
+  body[data-printing="inspector"] #insp-pdf-root { display: block !important; }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 3px; }
