@@ -1,4 +1,5 @@
 import React from 'react'
+import { createPortal } from 'react-dom'
 import { useForecastStore } from '../../store/forecastStore'
 import { fmt, attPct, getFiscalQuarterInfo } from '../../lib/fmt'
 
@@ -30,7 +31,7 @@ export default function PdfRoot() {
     { label: 'Pipeline', pipeKey: 'pipe_pipe',   rateKey: 'r_pipe',   expKey: 'bk_pp', color: '#6b7280' },
   ]
 
-  return (
+  const content = (
     <div
       id="pdf-root"
       style={{
@@ -148,4 +149,9 @@ export default function PdfRoot() {
       </div>
     </div>
   )
+
+  // Portal to document.body so #pdf-root is a sibling of #root,
+  // not nested inside it — this lets @media print hide #root while
+  // showing #pdf-root independently.
+  return createPortal(content, document.body)
 }

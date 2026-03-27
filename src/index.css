@@ -132,12 +132,21 @@ input, textarea, select, button {
 .fc-amount-updated { animation: fc-updated .35s ease-out; }
 
 /* ── Print styles ── */
+/* #pdf-root portals to document.body; hidden by default, shown only during print */
+#pdf-root { display: none; }
+
 @media print {
   @page { size: letter; margin: 14mm 16mm; }
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  .no-print, nav, header { display: none !important; }
+
+  /* Forecast PDF mode: hide the React app, show the branded layout */
+  body[data-printing="forecast"] #root    { display: none !important; }
   body[data-printing="forecast"] #pdf-root { display: block !important; }
-  body[data-printing="inspector"] #insp-pdf-root { display: block !important; }
+
+  /* Regular Ctrl+P: hide chrome only, show app content */
+  body:not([data-printing]) .no-print,
+  body:not([data-printing]) nav,
+  body:not([data-printing]) header { display: none !important; }
 }
 
 /* ── QE Easter Egg animations ── */
@@ -154,12 +163,6 @@ input, textarea, select, button {
   100% { transform: scaleY(1.3) translateY(-8px); }
 }
 
-/* ── PDF print — show #pdf-root only when printing forecast ── */
-#pdf-root { display: none; }
-@media print {
-  body[data-printing="forecast"] > * { display: none !important; }
-  body[data-printing="forecast"] #pdf-root { display: block !important; }
-}
 
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
