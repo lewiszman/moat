@@ -158,6 +158,12 @@ export const useForecastStore = create(
         s.derived = computeDerived(s)
       }),
 
+      // ── Supabase session restore ──
+      loadSnapshot: (snapshot) => set(s => {
+        Object.assign(s, snapshot)
+        s.derived = computeDerived(s)
+      }),
+
       // Import
       setImportData: (records, meta) => set(s => {
         s.importedData = records

@@ -1,8 +1,11 @@
 import React, { useEffect } from 'react'
 import { useForecastStore } from './store/forecastStore'
+import { useSessionStore } from './store/sessionStore'
 import { useDarkMode } from './hooks/useDarkMode'
+import { useAutoSave } from './hooks/useAutoSave'
 import { getFiscalQuarterInfo } from './lib/fmt'
 import { parseShareUrl } from './components/shared/ShareModal'
+import { supabase } from './lib/supabase'
 import Sidebar from './components/shared/Sidebar'
 import Topbar from './components/shared/Topbar'
 import ManagerView from './components/ManagerView/ManagerView'
@@ -17,15 +20,26 @@ export default function App() {
   const setFields     = useForecastStore(s => s.setFields)
   const recalc        = useForecastStore(s => s.recalc)
   const loadShareState = useForecastStore(s => s.loadShareState)
+  const setUser       = useSessionStore(s => s.setUser)
   const [dark] = useDarkMode()
 
-  // On mount: check for share URL params, auto-fill quarter label, run initial recalc
+  // Activate debounced auto-save (no-ops when not signed in)
+  useAutoSave()
+
+  // On mount: initialise Supabase auth listener + share URL + quarter label
   useEffect(() => {
-    // If URL contains share params, load them (overrides stored state)
+    // Supabase auth — sync current session and listen for changes
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    // Share URL params
     const shared = parseShareUrl()
     if (shared) {
       loadShareState(shared)
-      // Clean up the URL without reloading
       window.history.replaceState({}, '', window.location.pathname)
     } else {
       if (!quarterLabel) {
@@ -34,6 +48,8 @@ export default function App() {
       }
     }
     recalc()
+
+    return () => subscription.unsubscribe()
   }, []) // eslint-disable-line
 
   return (
