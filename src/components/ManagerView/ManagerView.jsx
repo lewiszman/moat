@@ -3,8 +3,12 @@ import { useForecastStore } from '../../store/forecastStore'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
 import CncWhatIf from './CncWhatIf'
+import MonthlyBreakdown from './MonthlyBreakdown'
+import QuarterStatusBar from './QuarterStatusBar'
 import SectionComment from '../shared/SectionComment'
 import ImportWizard from '../shared/ImportWizard'
+import ShareModal from '../shared/ShareModal'
+import PdfRoot from './PdfRoot'
 
 function ImportModal({ onClose }) {
   return (
@@ -25,10 +29,20 @@ function ImportModal({ onClose }) {
 
 export default function ManagerView() {
   const s = useForecastStore()
-  const [importOpen, setImportOpen] = useState(false)
+  const [importOpen, setImportOpen]   = useState(false)
+  const [shareOpen,  setShareOpen]    = useState(false)
+
+  const handlePrint = () => {
+    document.body.setAttribute('data-printing', 'forecast')
+    window.print()
+    setTimeout(() => document.body.removeAttribute('data-printing'), 1000)
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+
+      {/* Quarter status bar */}
+      <QuarterStatusBar />
 
       {/* Hero header */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -54,11 +68,42 @@ export default function ManagerView() {
           value={s.quarterLabel}
           onChange={e => s.setField('quarterLabel', e.target.value)}
         />
+
         <div className="ml-auto flex items-center gap-2">
+          {/* Import */}
           <button onClick={() => setImportOpen(true)} className="btn text-[11px] flex items-center gap-1.5">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 1v7M3 5l3 3 3-3M1 10h10"/></svg>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 1v7M3 5l3 3 3-3M1 10h10"/>
+            </svg>
             {s.importMeta ? 'Re-import' : 'Import CSV'}
           </button>
+
+          {/* Share */}
+          <button
+            onClick={() => setShareOpen(true)}
+            className="btn text-[11px] flex items-center gap-1.5"
+            title="Save & share URL"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="9.5" cy="2.5" r="1.5"/><circle cx="2.5" cy="6" r="1.5"/><circle cx="9.5" cy="9.5" r="1.5"/>
+              <line x1="4" y1="6.8" x2="8" y2="9"/><line x1="4" y1="5.2" x2="8" y2="3"/>
+            </svg>
+            Share
+          </button>
+
+          {/* PDF print */}
+          <button
+            onClick={handlePrint}
+            className="btn text-[11px] flex items-center gap-1.5 no-print"
+            title="Print / Export PDF"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="8" height="6" rx=".75"/><path d="M4 4V2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5V4"/><line x1="4" y1="7.5" x2="8" y2="7.5"/><line x1="4" y1="9" x2="6.5" y2="9"/>
+            </svg>
+            PDF
+          </button>
+
+          {/* CQ / Q+1 toggle */}
           <div className="flex rounded-lg overflow-hidden border border-[var(--bdr2)]">
             {['current', 'next'].map(mode => (
               <button key={mode} onClick={() => s.setQMode(mode)}
@@ -72,10 +117,22 @@ export default function ManagerView() {
 
       <ForecastCards />
 
-      <div className="sec-hd mt-6">Quarterly inputs<SectionComment sectionKey="qi" placeholder="e.g. Q3 FY26 — team at 70% of quota pace, 2 AEs ramping" /></div>
+      <div className="sec-hd mt-6">
+        Quarterly inputs
+        <SectionComment sectionKey="qi" placeholder="e.g. Q3 FY26 — team at 70% of quota pace, 2 AEs ramping" />
+      </div>
       <QuarterlyInputs />
 
-      <div className="sec-hd">Conversion rate assumptions<SectionComment sectionKey="cr" placeholder="e.g. Commit rate lowered to 75% — two deals slipped last quarter" /></div>
+      <div className="sec-hd">
+        Monthly breakdown
+        <SectionComment sectionKey="monthly" placeholder="e.g. M1 closed strong, M2 back-half weighted" />
+      </div>
+      <MonthlyBreakdown />
+
+      <div className="sec-hd">
+        Conversion rate assumptions
+        <SectionComment sectionKey="cr" placeholder="e.g. Commit rate lowered to 75% — two deals slipped last quarter" />
+      </div>
       <div className="card p-4">
         {[
           { label: 'Commit',         key: 'r_commit', color: '#1a56db', min: 50, max: 100 },
@@ -93,10 +150,18 @@ export default function ManagerView() {
         ))}
       </div>
 
-      <div className="sec-hd">Create &amp; close what-if<SectionComment sectionKey="cnc" placeholder="e.g. ASP reflects SMB segment only — mid-market deals excluded" /></div>
+      <div className="sec-hd">
+        Create &amp; close what-if
+        <SectionComment sectionKey="cnc" placeholder="e.g. ASP reflects SMB segment only — mid-market deals excluded" />
+      </div>
       <CncWhatIf />
 
+      {/* Modals */}
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+      {shareOpen  && <ShareModal  onClose={() => setShareOpen(false)} />}
+
+      {/* Hidden PDF root — visible only during print */}
+      <PdfRoot />
     </div>
   )
 }

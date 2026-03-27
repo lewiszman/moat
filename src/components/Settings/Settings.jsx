@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { useInspectorStore } from '../../store/forecastStore'
+import { useInspectorStore, useForecastStore } from '../../store/forecastStore'
 import { DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
+import { fmt } from '../../lib/fmt'
 
-const TABS = ['General', 'Inspector', 'Usage', 'About']
+const TABS = ['General', 'Defaults', 'Inspector', 'Usage', 'About']
 
 function TabBar({ active, onChange }) {
   return (
@@ -52,11 +53,14 @@ function Row({ label, sub, children }) {
 
 // ── General tab ────────────────────────────────────────────────
 function GeneralTab() {
+  const s = useForecastStore()
+
   const handleClear = () => {
     if (!confirm('Clear all saved data? Forecast inputs will be reset.')) return
     localStorage.clear()
     window.location.reload()
   }
+
   return (
     <div>
       <Section title="Salesforce">
@@ -69,10 +73,14 @@ function GeneralTab() {
         </Row>
       </Section>
       <Section title="Fiscal year">
-        <Row label="FY start month" sub="Sets Q1 start. Change 1 = Jan, 4 = Apr, etc.">
-          <select className="text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-2 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]">
+        <Row label="FY start month" sub="Sets Q1 start. 1 = Jan, 4 = Apr, etc.">
+          <select
+            value={s.fyStartMonth || 1}
+            onChange={e => s.setField('fyStartMonth', +e.target.value)}
+            className="text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-2 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+          >
             {Array.from({ length: 12 }, (_, i) => (
-              <option key={i+1} value={i+1}>
+              <option key={i + 1} value={i + 1}>
                 {new Date(2000, i, 1).toLocaleString('en-US', { month: 'long' })}
               </option>
             ))}
@@ -86,6 +94,93 @@ function GeneralTab() {
           </button>
         </Row>
       </Section>
+    </div>
+  )
+}
+
+// ── Defaults tab ───────────────────────────────────────────────
+function DefaultsTab() {
+  const s = useForecastStore()
+  const d = s.forecastDefaults || {}
+  const [saved, setSaved] = useState(false)
+
+  const update = (key, value) => {
+    s.setForecastDefault(key, value)
+  }
+
+  const applyNow = () => {
+    s.applyForecastDefaults()
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  const RATE_ROWS = [
+    { label: 'Commit rate',       key: 'r_commit', color: '#1a56db', min: 50, max: 100 },
+    { label: 'Probable rate',     key: 'r_prob',   color: '#0d7c3d', min: 30, max: 95  },
+    { label: 'Upside rate',       key: 'r_up',     color: '#b45309', min: 10, max: 80  },
+    { label: 'Pipeline rate',     key: 'r_pipe',   color: '#6b7280', min: 5,  max: 50  },
+    { label: 'Create & close rate', key: 'r_cnc',  color: '#6b7280', min: 5,  max: 50  },
+  ]
+
+  return (
+    <div>
+      <Section title="Default conversion rates">
+        <div className="text-[11px] text-[var(--tx2)] mb-4">
+          These values apply when you create a new quarter or reset inputs. They don't change your current inputs until you click "Apply to current quarter".
+        </div>
+        {RATE_ROWS.map(row => (
+          <div key={row.key} className="flex items-center gap-4 py-2 border-b border-[var(--bdr2)] last:border-0">
+            <span className="text-[13px] text-[var(--tx)] w-40 flex-shrink-0">{row.label}</span>
+            <input
+              type="range" min={row.min} max={row.max} step={1}
+              value={d[row.key] ?? 0}
+              onChange={e => update(row.key, +e.target.value)}
+              className="flex-1 accent-[var(--blue)]"
+            />
+            <span className="text-[13px] font-[700] w-10 text-right" style={{ color: row.color }}>
+              {d[row.key]}%
+            </span>
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Default create &amp; close parameters">
+        <div className="flex flex-col gap-3">
+          <Row label="Default opps per quarter" sub="Used when no import data is available">
+            <input
+              type="number"
+              min={0} max={100} step={1}
+              value={d.cnc_opps ?? 5}
+              onChange={e => update('cnc_opps', +e.target.value)}
+              className="w-24 text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] text-right"
+            />
+          </Row>
+          <Row label="Default ASP" sub="Average selling price for C&C deals">
+            <div className="flex items-center gap-1">
+              <span className="text-[12px] text-[var(--tx2)]">$</span>
+              <input
+                type="number"
+                min={0} step={500}
+                value={d.cnc_asp ?? 14000}
+                onChange={e => update('cnc_asp', +e.target.value)}
+                className="w-28 text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] text-right"
+              />
+            </div>
+          </Row>
+        </div>
+      </Section>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={applyNow}
+          className={`btn text-[11px] ${saved ? 'bg-green-500 text-white border-green-500' : 'btn-primary'}`}
+        >
+          {saved ? '✓ Applied' : 'Apply to current quarter'}
+        </button>
+        <span className="text-[11px] text-[var(--tx2)]">
+          Overrides current conversion rates and C&amp;C inputs with these defaults.
+        </span>
+      </div>
     </div>
   )
 }
@@ -123,10 +218,7 @@ function InspectorTab() {
           rows={6}
           className="w-full text-[12px] font-mono border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-2 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] resize-y"
         />
-        <button
-          onClick={() => setSystemPrompt('')}
-          className="btn text-[11px] mt-2"
-        >
+        <button onClick={() => setSystemPrompt('')} className="btn text-[11px] mt-2">
           Reset to default
         </button>
       </Section>
@@ -147,20 +239,20 @@ function InspectorTab() {
 function UsageTab() {
   const { usageLog, clearUsageLog } = useInspectorStore()
 
-  const now = Date.now()
+  const now     = Date.now()
   const periods = {
-    Today:   usageLog.filter(r => r.ts >= new Date().setHours(0,0,0,0)),
+    Today:   usageLog.filter(r => r.ts >= new Date().setHours(0, 0, 0, 0)),
     Week:    usageLog.filter(r => r.ts >= now - 7  * 86400000),
     Month:   usageLog.filter(r => r.ts >= now - 30 * 86400000),
     Quarter: usageLog.filter(r => r.ts >= now - 90 * 86400000),
   }
 
-  const fmtTok = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : String(n)
+  const fmtTok  = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
   const fmtCost = c => c < 0.01 ? '<$0.01' : '$' + c.toFixed(2)
   const periodCost = runs => {
-    const inp = runs.reduce((s,r) => s+r.input, 0)
-    const out = runs.reduce((s,r) => s+r.output, 0)
-    return { tok: inp+out, cost: inp*COST_PER_INPUT_TOKEN + out*COST_PER_OUTPUT_TOKEN }
+    const inp = runs.reduce((s, r) => s + r.input, 0)
+    const out = runs.reduce((s, r) => s + r.output, 0)
+    return { tok: inp + out, cost: inp * COST_PER_INPUT_TOKEN + out * COST_PER_OUTPUT_TOKEN }
   }
 
   return (
@@ -186,8 +278,8 @@ function UsageTab() {
                 <span>Run</span><span className="text-right">Tokens</span><span className="text-right ml-4">Cost</span>
               </div>
               {[...usageLog].reverse().slice(0, 15).map((r, i) => {
-                const dt = new Date(r.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
-                const tok = r.input + r.output
+                const dt   = new Date(r.ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                const tok  = r.input + r.output
                 const cost = r.input * COST_PER_INPUT_TOKEN + r.output * COST_PER_OUTPUT_TOKEN
                 return (
                   <div key={i} className="grid grid-cols-[1fr_auto_auto] text-[12px] py-1.5 border-b border-[var(--bdr2)] last:border-0">
@@ -218,16 +310,19 @@ const CHANGELOG = [
     date: 'Mar 2026',
     current: true,
     items: [
+      ['Monthly breakdown', 'M1/M2/M3 input table with past-month locking, linearity row, variance vs quota pace'],
+      ['CQ/Q+1 isolated state', 'Switching between CQ and Q+1 saves and restores completely separate input sets'],
+      ['Quarter status bar', 'Date strip with week number, selling days remaining, Q-end date, progress bar'],
+      ['Rep View', 'Coaching/explainer view with forecast category definitions and rollup diagram'],
+      ['Save & share URL', 'Full forecast state encoded as URL parameters for bookmarking and sharing'],
+      ['Manager Insights tab', 'Flag frequency chart, AE risk score chart, AI team coaching themes'],
+      ['Inspector XLSX export', 'One-click export of full inspection results to Excel'],
+      ['Manager View PDF', 'Branded navy/coral print layout triggered from PDF button'],
+      ['Settings Forecast Defaults', 'Configurable default conversion rates and C&C parameters'],
+      ['QE easter egg', 'Q-End Mode with ticker tape and flames (low priority but fun)'],
       ['Forecast arithmetic', 'Commit = Closed + Commit; Probable = Commit FC + Probable + C&C; Upside = Probable FC + Upside'],
-      ['½ Upside toggle', 'Probable card pill to include 50% of Upside bookings in Probable FC; Upside FC always reflects 100% total'],
-      ['Hero cards — multi-expand', 'Each card expands independently; expand all / collapse all; copy image (html2canvas, clipboard + download)'],
-      ['Section comments', 'Pencil icon on key sections; free-form note persisted to localStorage'],
-      ['Pipeline Inspector — redesigned flags', 'Close date (past / weekend / <3 biz days / discovery <10 biz); FC vs stage alignment; MEDDPICC field-level gaps; activity >14d'],
+      ['Hero cards — multi-expand', 'Each card expands independently; copy image (html2canvas)'],
       ['Pipeline Inspector — AI next step', 'AI assesses whether next step is concrete, future-dated, AE-owned'],
-      ['Pipeline Inspector — UX', 'Deal grouping by FC category; team stats bar; severity accent borders; AI deal bolding; toolbar controls'],
-      ['PDF export — fixed', 'Consolidated @media print; data-printing attribute switching; reliable per-AE page breaks'],
-      ['AE scope filter', 'Multi-select filter scoping all forecast inputs to selected reps'],
-      ['Import persistence', 'Pipeline data cached in localStorage, restores on reload'],
       ['Deal-Backing module', 'Drag-and-drop Kanban; waterfall bands; cumulative FC headlines'],
       ['React migration', 'Migrated to React 18 + Vite + Zustand + Tailwind (v2.7)'],
     ],
@@ -269,10 +364,10 @@ function AboutTab() {
       <Section title="About">
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
-            ['App', 'MOAT — Manager\'s Forecast Calculator'],
+            ['App',     "MOAT — Manager's Forecast Calculator"],
             ['Version', 'v2.7'],
-            ['Stack', 'React 18 · Vite · Zustand · Tailwind'],
-            ['AI', 'Claude Sonnet 4 via Anthropic API'],
+            ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
+            ['AI',      'Claude Sonnet 4 via Anthropic API'],
           ].map(([k, v]) => (
             <div key={k} className="flex flex-col">
               <span className="text-[10px] uppercase tracking-wider text-[var(--tx2)] mb-0.5">{k}</span>
@@ -316,6 +411,7 @@ export default function Settings() {
       <h1 className="text-[18px] font-[700] text-[var(--tx)] mb-5">Settings</h1>
       <TabBar active={tab} onChange={setTab} />
       {tab === 'General'   && <GeneralTab />}
+      {tab === 'Defaults'  && <DefaultsTab />}
       {tab === 'Inspector' && <InspectorTab />}
       {tab === 'Usage'     && <UsageTab />}
       {tab === 'About'     && <AboutTab />}

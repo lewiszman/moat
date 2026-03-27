@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
+import { getFiscalQuarterInfo, sellDaysRemaining } from '../../lib/fmt'
+import QEasterEgg from './QEasterEgg'
 
 const NAV_ITEMS = [
   {
@@ -36,6 +38,17 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    id: 'repview',
+    label: 'Rep View',
+    badge: 'Beta',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="7.5" cy="5" r="2.5"/>
+        <path d="M2 13c0-3.3 2.5-5.5 5.5-5.5S13 9.7 13 13"/>
+      </svg>
+    ),
+  },
 ]
 
 const BOTTOM_ITEMS = [
@@ -51,10 +64,37 @@ const BOTTOM_ITEMS = [
   },
 ]
 
+// Detect Q-End: <= 5 selling days remaining
+function useQEnd() {
+  const qMode   = useForecastStore(s => s.qMode)
+  const fyStart = useForecastStore(s => s.fyStartMonth) || 1
+  const qInfo   = getFiscalQuarterInfo(qMode, fyStart)
+  if (qMode !== 'current' || !qInfo.qEndDate) return false
+  const now = new Date()
+  const days = sellDaysRemaining(now, qInfo.qEndDate)
+  return days <= 5
+}
+
 export default function Sidebar() {
-  const activeView = useForecastStore(s => s.activeView)
+  const activeView   = useForecastStore(s => s.activeView)
   const setActiveView = useForecastStore(s => s.setActiveView)
   const [expanded, setExpanded] = useLocalStorage('rail_expanded', false)
+  const [qeActive,  setQeActive]  = useState(false)
+  const isQEnd = useQEnd()
+
+  // Secret triple-click on MOAT logo triggers QE
+  const logoClickRef = useRef(0)
+  const logoTimerRef = useRef(null)
+
+  const handleLogoClick = () => {
+    logoClickRef.current++
+    clearTimeout(logoTimerRef.current)
+    logoTimerRef.current = setTimeout(() => { logoClickRef.current = 0 }, 600)
+    if (logoClickRef.current >= 3) {
+      logoClickRef.current = 0
+      setQeActive(true)
+    }
+  }
 
   const NavItem = ({ item }) => {
     const isActive = activeView === item.id
@@ -87,40 +127,75 @@ export default function Sidebar() {
   }
 
   return (
-    <nav
-      className={`
-        flex flex-col flex-shrink-0 h-full bg-[var(--bg)] border-r border-[var(--bdr2)]
-        transition-all duration-200
-        ${expanded ? 'w-52' : 'w-14'}
-      `}
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-3 border-b border-[var(--bdr2)]">
-        {expanded && (
-          <span className="text-[13px] font-[800] tracking-tight text-[var(--tx)]">MOAT</span>
+    <>
+      <nav
+        className={`
+          flex flex-col flex-shrink-0 h-full bg-[var(--bg)] border-r border-[var(--bdr2)]
+          transition-all duration-200
+          ${expanded ? 'w-52' : 'w-14'}
+        `}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-3 border-b border-[var(--bdr2)]">
+          {expanded && (
+            <button
+              onClick={handleLogoClick}
+              className="text-[13px] font-[800] tracking-tight text-[var(--tx)] border-none bg-transparent cursor-pointer p-0 select-none"
+              title={isQEnd ? '🔥 Q-End!' : 'MOAT'}
+            >
+              {isQEnd ? '🔥' : 'MOAT'}
+            </button>
+          )}
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="p-1.5 rounded hover:bg-[var(--bg3)] text-[var(--tx2)] cursor-pointer border-none bg-transparent ml-auto"
+            title={expanded ? 'Collapse' : 'Expand'}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+              <line x1="2" y1="4" x2="14" y2="4"/>
+              <line x1="2" y1="8" x2="14" y2="8"/>
+              <line x1="2" y1="12" x2="14" y2="12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Q-End badge when collapsed */}
+        {!expanded && isQEnd && (
+          <button
+            onClick={() => setQeActive(true)}
+            className="mx-2 mt-2 p-1.5 rounded-lg bg-red-50 hover:bg-red-100 border-none cursor-pointer text-center text-[16px]"
+            title="Q-End Mode!"
+          >
+            🔥
+          </button>
         )}
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="p-1.5 rounded hover:bg-[var(--bg3)] text-[var(--tx2)] cursor-pointer border-none bg-transparent ml-auto"
-          title={expanded ? 'Collapse' : 'Expand'}
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <line x1="2" y1="4" x2="14" y2="4"/>
-            <line x1="2" y1="8" x2="14" y2="8"/>
-            <line x1="2" y1="12" x2="14" y2="12"/>
-          </svg>
-        </button>
-      </div>
 
-      {/* Main nav */}
-      <div className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
-        {NAV_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
-      </div>
+        {/* Main nav */}
+        <div className="flex-1 flex flex-col gap-1 p-2 overflow-y-auto">
+          {NAV_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
+        </div>
 
-      {/* Bottom nav */}
-      <div className="flex flex-col gap-1 p-2 border-t border-[var(--bdr2)]">
-        {BOTTOM_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
-      </div>
-    </nav>
+        {/* Q-End button (expanded) */}
+        {expanded && isQEnd && (
+          <div className="px-2 pb-1">
+            <button
+              onClick={() => setQeActive(true)}
+              className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-[12px] font-[700] cursor-pointer border-none text-white"
+              style={{ background: 'linear-gradient(90deg, #1a1a2e, #E85D3A)' }}
+            >
+              🔥 Q-End Mode!
+            </button>
+          </div>
+        )}
+
+        {/* Bottom nav */}
+        <div className="flex flex-col gap-1 p-2 border-t border-[var(--bdr2)]">
+          {BOTTOM_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
+        </div>
+      </nav>
+
+      {/* QE Easter Egg overlay */}
+      {qeActive && <QEasterEgg onClose={() => setQeActive(false)} />}
+    </>
   )
 }

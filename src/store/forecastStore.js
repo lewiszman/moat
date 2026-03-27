@@ -18,6 +18,22 @@ const DEFAULT_MONTHLY = {
   m3_closed: 0, m3_commit: 0, m3_prob: 0, m3_up: 0,
 }
 
+// Fields that are isolated per qMode (snapshot/restore on switch)
+const ISOLATED_FIELDS = [
+  'quota', 'closed', 'probIncludesUpside',
+  'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
+  'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',
+  'cnc_opps', 'cnc_asp',
+  'm1_closed', 'm1_commit', 'm1_prob', 'm1_up',
+  'm2_closed', 'm2_commit', 'm2_prob', 'm2_up',
+  'm3_closed', 'm3_commit', 'm3_prob', 'm3_up',
+]
+
+const DEFAULT_ISOLATED = {
+  quota: 0, closed: 0, probIncludesUpside: false,
+  ...DEFAULT_RATES, ...DEFAULT_PIPELINE, ...DEFAULT_CNC, ...DEFAULT_MONTHLY,
+}
+
 function computeDerived(s) {
   const bk_c  = s.pipe_commit * (s.r_commit / 100)
   const bk_p  = s.pipe_prob   * (s.r_prob   / 100)
@@ -44,6 +60,12 @@ export const useForecastStore = create(
       // Quarter mode
       qMode: 'current', // 'current' | 'next'
 
+      // Per-mode isolated state snapshots
+      stateByMode: { current: null, next: null },
+
+      // Monthly unlock overrides (true = manually unlocked past month)
+      monthUnlocked: { m1: false, m2: false, m3: false },
+
       // Core inputs
       quota: 0,
       closed: 0,
@@ -66,6 +88,15 @@ export const useForecastStore = create(
       // Active view
       activeView: 'manager',
 
+      // Forecast defaults (persisted, used in Settings → Defaults tab)
+      forecastDefaults: {
+        r_commit: 80, r_prob: 75, r_up: 50, r_pipe: 18, r_cnc: 18,
+        cnc_opps: 5, cnc_asp: 14000,
+      },
+
+      // Fiscal year start month (1 = Jan, used in quarter status bar)
+      fyStartMonth: 1,
+
       // ── Actions ──
       setField: (key, value) => set(s => { s[key] = value }),
 
@@ -78,16 +109,60 @@ export const useForecastStore = create(
         s.derived = computeDerived(s)
       }),
 
-      setQMode: (mode) => set(s => { s.qMode = mode }),
+      // ── CQ / Q+1 isolated state ──
+      setQMode: (mode) => set(s => {
+        if (mode === s.qMode) return
+        // Snapshot current mode's inputs
+        const snap = {}
+        ISOLATED_FIELDS.forEach(k => { snap[k] = s[k] })
+        s.stateByMode[s.qMode] = snap
+        // Restore target mode (or defaults if never visited)
+        const restore = s.stateByMode[mode]
+        if (restore) {
+          ISOLATED_FIELDS.forEach(k => { s[k] = restore[k] })
+        } else {
+          ISOLATED_FIELDS.forEach(k => { s[k] = DEFAULT_ISOLATED[k] })
+        }
+        s.qMode = mode
+        s.derived = computeDerived(s)
+        s.monthUnlocked = { m1: false, m2: false, m3: false }
+      }),
 
       setActiveView: (view) => set(s => { s.activeView = view }),
+
+      // ── Monthly breakdown ──
+      toggleMonthLock: (month) => set(s => {
+        s.monthUnlocked[month] = !s.monthUnlocked[month]
+      }),
+
+      // ── Forecast defaults ──
+      setForecastDefault: (key, value) => set(s => {
+        s.forecastDefaults[key] = value
+      }),
+
+      applyForecastDefaults: () => set(s => {
+        const d = s.forecastDefaults
+        s.r_commit  = d.r_commit
+        s.r_prob    = d.r_prob
+        s.r_up      = d.r_up
+        s.r_pipe    = d.r_pipe
+        s.r_cnc     = d.r_cnc
+        s.cnc_opps  = d.cnc_opps
+        s.cnc_asp   = d.cnc_asp
+        s.derived   = computeDerived(s)
+      }),
+
+      // ── Share URL ──
+      loadShareState: (fields) => set(s => {
+        Object.assign(s, fields)
+        s.derived = computeDerived(s)
+      }),
 
       // Import
       setImportData: (records, meta) => set(s => {
         s.importedData = records
         s.importMeta = meta
         s.scopeSelected = null
-        // Auto-populate forecast fields
         const agg = aggregateForecast(records)
         const monthly = calcMonthlyClosedBreakdown(records)
         Object.assign(s, agg)
@@ -131,6 +206,8 @@ export const useForecastStore = create(
         managerTeam: s.managerTeam,
         quarterLabel: s.quarterLabel,
         qMode: s.qMode,
+        stateByMode: s.stateByMode,
+        monthUnlocked: s.monthUnlocked,
         quota: s.quota,
         closed: s.closed,
         r_commit: s.r_commit, r_prob: s.r_prob, r_up: s.r_up,
@@ -140,7 +217,11 @@ export const useForecastStore = create(
         cnc_opps: s.cnc_opps, cnc_asp: s.cnc_asp,
         probIncludesUpside: s.probIncludesUpside,
         activeView: s.activeView,
-        ...DEFAULT_MONTHLY,
+        forecastDefaults: s.forecastDefaults,
+        fyStartMonth: s.fyStartMonth,
+        m1_closed: s.m1_closed, m1_commit: s.m1_commit, m1_prob: s.m1_prob, m1_up: s.m1_up,
+        m2_closed: s.m2_closed, m2_commit: s.m2_commit, m2_prob: s.m2_prob, m2_up: s.m2_up,
+        m3_closed: s.m3_closed, m3_commit: s.m3_commit, m3_prob: s.m3_prob, m3_up: s.m3_up,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
@@ -157,7 +238,7 @@ export const useInspectorStore = create(
     immer((set, get) => ({
       // Settings
       apiKey: '',
-      systemPrompt: '',      // empty = use DEFAULT_SYSTEM_PROMPT
+      systemPrompt: '',
       coachingFocus: '',
 
       // Run state
