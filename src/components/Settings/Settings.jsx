@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useInspectorStore, useForecastStore } from '../../store/forecastStore'
+import { useInspectorStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { fmt } from '../../lib/fmt'
@@ -59,9 +59,27 @@ function Row({ label, sub, children }) {
 
 // ── General tab ────────────────────────────────────────────────
 function GeneralTab() {
-  const s = useForecastStore()
-  const [sfdcInput, setSfdcInput]   = useState(s.sfdcUrl || '')
-  const [sfdcError, setSfdcError]   = useState('')
+  const s           = useForecastStore()
+  const inspector   = useInspectorStore()
+  const activeQuarter = useQuarterStore(st => st.activeQuarter)
+
+  const [sfdcInput, setSfdcInput]     = useState(s.sfdcUrl || '')
+  const [sfdcError, setSfdcError]     = useState('')
+  const [defaultInput, setDefaultInput] = useState(inspector.defaultSfdcUrl || '')
+  const [defaultError, setDefaultError] = useState('')
+
+  const overrideLabel = activeQuarter === 'q1' ? 'Q+1 Override' : 'CQ Override'
+
+  const handleDefaultChange = (e) => {
+    const val = e.target.value
+    setDefaultInput(val)
+    if (isValidHttpsUrl(val)) {
+      setDefaultError('')
+      inspector.setDefaultSfdcUrl(val)
+    } else {
+      setDefaultError('URL must start with https://')
+    }
+  }
 
   const handleSfdcChange = (e) => {
     const val = e.target.value
@@ -84,13 +102,24 @@ function GeneralTab() {
   return (
     <div>
       <Section title="Salesforce">
-        <Row label="Report URL" sub="Used for the 'Open in Salesforce' link">
+        <Row label="Default Report URL" sub="Applies to both CQ and Q+1 unless overridden below">
+          <div className="flex flex-col items-end gap-1">
+            <input
+              className={`w-72 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${defaultError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
+              value={defaultInput}
+              onChange={handleDefaultChange}
+              placeholder="https://..."
+            />
+            {defaultError && <span className="text-[11px] text-red-500">{defaultError}</span>}
+          </div>
+        </Row>
+        <Row label={overrideLabel} sub="Leave blank to use the default URL above">
           <div className="flex flex-col items-end gap-1">
             <input
               className={`w-72 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${sfdcError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
               value={sfdcInput}
               onChange={handleSfdcChange}
-              placeholder="https://..."
+              placeholder={inspector.defaultSfdcUrl || 'https://...'}
             />
             {sfdcError && <span className="text-[11px] text-red-500">{sfdcError}</span>}
           </div>

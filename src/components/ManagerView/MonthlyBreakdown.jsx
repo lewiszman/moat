@@ -1,17 +1,28 @@
 import React, { useMemo } from 'react'
-import { useForecastStore } from '../../store/forecastStore'
+import { useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { parseMoney, getFiscalQuarterInfo } from '../../lib/fmt'
 
 // ── Month metadata ──────────────────────────────────────────────
 
-function getQuarterMonths(fyStartMonth) {
+function getQuarterMonths(fyStartMonth, isNextQuarter) {
+  // Always derive from current quarter, then advance 3 months for Q+1.
+  // getFiscalQuarterInfo('next') computes the right label but doesn't advance
+  // qStartMonth/qStartYear, so we do it manually here.
   const info = getFiscalQuarterInfo('current', fyStartMonth)
   const now  = new Date()
   now.setHours(0, 0, 0, 0)
 
+  let startMonth = info.qStartMonth
+  let startYear  = info.qStartYear
+  if (isNextQuarter) {
+    const next = ((info.qStartMonth - 1 + 3) % 12) + 1
+    if (next <= info.qStartMonth) startYear++ // crossed a year boundary
+    startMonth = next
+  }
+
   return [0, 1, 2].map(offset => {
-    const rawIdx  = info.qStartMonth - 1 + offset
-    const mYear   = info.qStartYear + Math.floor(rawIdx / 12)
+    const rawIdx  = startMonth - 1 + offset
+    const mYear   = startYear + Math.floor(rawIdx / 12)
     const mNum    = (rawIdx % 12) + 1
     const lastDay = new Date(mYear, mNum, 0)
     lastDay.setHours(23, 59, 59, 999)
@@ -66,9 +77,11 @@ const COL = '120px repeat(3, 1fr) 100px'
 export default function MonthlyBreakdown() {
   const s        = useForecastStore()
   const fyStart  = s.fyStartMonth || 1
-  const unlocked = s.monthUnlocked || { m1: false, m2: false, m3: false }
+  const unlocked     = s.monthUnlocked || { m1: false, m2: false, m3: false }
+  const activeQuarter = useQuarterStore(s => s.activeQuarter)
+  const isNextQuarter = activeQuarter === 'q1'
 
-  const months = useMemo(() => getQuarterMonths(fyStart), [fyStart])
+  const months = useMemo(() => getQuarterMonths(fyStart, isNextQuarter), [fyStart, isNextQuarter])
 
   // Past months lock ALL rows to actuals (only closed matters once month ends).
   function isPastLocked(m) {

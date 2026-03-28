@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react'
+import { useInspectorStore } from '../../store/forecastStore'
 
 const STEPS = [
   {
@@ -58,11 +59,32 @@ const STEPS = [
 ]
 
 export default function GuidedTour({ onClose, onNavigate }) {
+  const defaultSfdcUrl = useInspectorStore(s => s.defaultSfdcUrl) || ''
+
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [onClose])
+
+  function stepDescription(step, i) {
+    if (i === 0 && defaultSfdcUrl) {
+      return (
+        <span>
+          {step.description}{' '}
+          <a
+            href={defaultSfdcUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--blue)] hover:underline"
+          >
+            Open SFDC report →
+          </a>
+        </span>
+      )
+    }
+    return step.description
+  }
 
   return (
     <div
@@ -100,7 +122,7 @@ export default function GuidedTour({ onClose, onNavigate }) {
               </span>
               <div className="flex-1">
                 <div className="text-[13px] font-[700] text-[var(--tx)]">{step.title}</div>
-                <div className="text-[12px] text-[var(--tx2)] leading-relaxed mt-0.5">{step.description}</div>
+                <div className="text-[12px] text-[var(--tx2)] leading-relaxed mt-0.5">{stepDescription(step, i)}</div>
                 {step.chip && (
                   <button
                     onClick={() => { onNavigate(step.view); onClose() }}

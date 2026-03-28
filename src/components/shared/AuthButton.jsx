@@ -13,7 +13,7 @@ export default function AuthButton() {
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-[var(--bg2)] border border-[var(--bdr2)]">
           {avatar
-            ? <img src={avatar} alt="" className="w-5 h-5 rounded-full" />
+            ? <img src={avatar} alt="" className="w-5 h-5 rounded-full" referrerPolicy="no-referrer" />
             : <span className="w-5 h-5 rounded-full bg-[var(--blue)] text-white text-[10px] flex items-center justify-center font-bold">
                 {name[0]?.toUpperCase()}
               </span>

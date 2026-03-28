@@ -223,6 +223,8 @@ export const useInspectorStore = create(
       systemPrompt: '',
       coachingFocus: '',
       aiEnabled:   false,
+      defaultSfdcUrl: '',
+      setDefaultSfdcUrl: (url) => set(s => { s.defaultSfdcUrl = url }),
       groupBy:     'category',
       sortBy:      'severity',
       flaggedOnly: false,
@@ -288,6 +290,7 @@ export const useInspectorStore = create(
       partialize: (s) => ({
         systemPrompt: s.systemPrompt, coachingFocus: s.coachingFocus,
         usageLog: s.usageLog, aiEnabled: s.aiEnabled,
+        defaultSfdcUrl: s.defaultSfdcUrl,
         groupBy: s.groupBy, sortBy: s.sortBy,
         repResults: s.repResults, lastResult: s.lastResult,
       }),

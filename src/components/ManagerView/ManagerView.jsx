@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useForecastStore, useQuarterStore } from '../../store/forecastStore'
+import { useForecastStore, useQuarterStore, useInspectorStore } from '../../store/forecastStore'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
 import CncWhatIf from './CncWhatIf'
@@ -40,7 +40,8 @@ export default function ManagerView() {
     setTimeout(() => document.body.removeAttribute('data-printing'), 1000)
   }
 
-  const sfdcUrl = s.sfdcUrl || ''
+  const defaultSfdcUrl = useInspectorStore(s => s.defaultSfdcUrl) || ''
+  const sfdcUrl        = s.sfdcUrl || defaultSfdcUrl
   const sfdcEnabled = (() => {
     if (!sfdcUrl) return false
     try { return new URL(sfdcUrl).protocol === 'https:' } catch { return false }
