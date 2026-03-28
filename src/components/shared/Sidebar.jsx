@@ -1,6 +1,7 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
+import GuidedTour from './GuidedTour'
 
 const NAV_ITEMS = [
   {
@@ -66,6 +67,7 @@ export default function Sidebar() {
   const activeView    = useForecastStore(s => s.activeView)
   const setActiveView = useForecastStore(s => s.setActiveView)
   const [expanded, setExpanded] = useLocalStorage('rail_expanded', false)
+  const [tourOpen, setTourOpen] = useState(false)
 
   const NavItem = ({ item }) => {
     const isActive = activeView === item.id
@@ -98,6 +100,7 @@ export default function Sidebar() {
   }
 
   return (
+    <>
     <nav
       className={`
         flex flex-col flex-shrink-0 h-full bg-[var(--bg)] border-r border-[var(--bdr2)]
@@ -130,8 +133,26 @@ export default function Sidebar() {
 
       {/* Bottom nav */}
       <div className="flex flex-col gap-1 p-2 border-t border-[var(--bdr2)]">
+        {/* Guide trigger */}
+        <button
+          onClick={() => setTourOpen(true)}
+          title={!expanded ? 'Guide' : undefined}
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-left transition-colors duration-100 cursor-pointer border-none bg-transparent text-[var(--tx2)] hover:bg-[var(--bg3)] hover:text-[var(--tx)]"
+        >
+          <span className="flex-shrink-0 w-[15px] h-[15px] rounded-full border-2 border-current flex items-center justify-center text-[9px] font-[800]">?</span>
+          {expanded && <span className="text-[13px] font-[600] whitespace-nowrap">Guide</span>}
+        </button>
+
         {BOTTOM_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
       </div>
     </nav>
+
+    {tourOpen && (
+      <GuidedTour
+        onClose={() => setTourOpen(false)}
+        onNavigate={setActiveView}
+      />
+    )}
+    </>
   )
 }
