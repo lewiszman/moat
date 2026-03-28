@@ -223,22 +223,15 @@ export const useInspectorStore = create(
       usageLog: [],
 
       initApiKey: (userId) => {
-        const ssKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
-        // One-time migration: move key from localStorage to sessionStorage
-        const lsKey  = userId ? `moat_apikey_${userId}` : 'moat_apikey'
-        const legacy = localStorage.getItem(lsKey)
-        if (legacy) {
-          sessionStorage.setItem(ssKey, legacy)
-          localStorage.removeItem(lsKey)
-        }
-        const key = sessionStorage.getItem(ssKey) || ''
+        const lsKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
+        const key   = localStorage.getItem(lsKey) || ''
         set(s => { s.apiKey = key; if (key && !s.aiEnabled) s.aiEnabled = true })
       },
 
       setApiKey: (key, userId) => {
-        const ssKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
-        if (key) sessionStorage.setItem(ssKey, key)
-        else     sessionStorage.removeItem(ssKey)
+        const lsKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'
+        if (key) localStorage.setItem(lsKey, key)
+        else     localStorage.removeItem(lsKey)
         set(s => { s.apiKey = key })
       },
 

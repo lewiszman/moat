@@ -218,7 +218,7 @@ function InspectorTab() {
   return (
     <div>
       <Section title="Anthropic API key">
-        <Row label="API key" sub="Stored in session storage only — cleared when this tab closes. Never sent to Supabase or shared.">
+        <Row label="API key" sub="Stored in your browser only — never sent to Supabase or shared.">
           <div className="flex items-center gap-2">
             <input
               type={showKey ? 'text' : 'password'}
