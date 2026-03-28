@@ -407,7 +407,7 @@ const CHANGELOG = [
     current: false,
     items: [
       ['Q+1 mode removed', 'Forecast inputs, snapshots, and tracker are current quarter only; quarter label remains manually editable'],
-      ['Deal-Backing columns renamed', 'Deal-Backed Commit, Deal-Backed Probable, Deal-Backed Upside for clearer distinction from Manager View tiers'],
+      ['Deal-Backing columns renamed', 'Deal-Backed Commit, Deal-Backed Probable, Deal-Backed Upside for clearer distinction from Manager Walk-Up tiers'],
       ['Pipeline deals default to Bench', 'Newly loaded pipeline-category deals start in Bench in Deal-Backing; drag to include in forecast'],
       ['Weekly snapshots with monthly data', 'M1/M2/M3 breakdown by tier (closed/commit/probable/upside) saved in each snapshot for future drill-down and export'],
       ['SFDC quick-link', 'External link button beside Import CSV opens the configured pipeline report URL in Salesforce'],
@@ -421,7 +421,7 @@ const CHANGELOG = [
       ['Forecast arithmetic', 'C&C moves to Commit FC; C&C bookings prorated by weeks remaining in quarter (denominator: quarter weeks − 2)'],
       ['Week-over-week tracker', 'Auto-snapshot every Monday + manual snapshots; variance deltas per forecast tier; Week 2 and Week 10 accuracy badges resolve at quarter end when actual closed is entered'],
       ['Pipeline Inspector overhaul', 'Full-width table view; standardized flag library with typed IDs, consistent labels, severity weights; AI toggle (rules-only mode is first-class); exec and manager Slack copy'],
-      ['Deal-Backing C&C card', 'Persistent synthetic card defaulting from Manager View; editable overrides; prorated value; draggable to any column'],
+      ['Deal-Backing C&C card', 'Persistent synthetic card defaulting from Manager Walk-Up; editable overrides; prorated value; draggable to any column'],
       ['Supabase session persistence', 'GitHub OAuth; auto-save + named snapshots; session history with restore; API key scoped per user, never leaves device'],
       ['Author and feedback', 'About section updated; in-app feedback form'],
     ],
@@ -438,7 +438,7 @@ const CHANGELOG = [
       ['Save & share URL', 'Full forecast state encoded as URL parameters for bookmarking and sharing'],
       ['Manager Insights tab', 'Flag frequency chart, AE risk score chart, AI team coaching themes'],
       ['Inspector XLSX export', 'One-click export of full inspection results to Excel'],
-      ['Manager View PDF', 'Branded navy/coral print layout triggered from PDF button'],
+      ['Manager Walk-Up PDF', 'Branded navy/coral print layout triggered from PDF button'],
       ['Settings Forecast Defaults', 'Configurable default conversion rates and C&C parameters'],
       ['QE easter egg', 'Q-End Mode with ticker tape and flames (low priority but fun)'],
       ['Forecast arithmetic', 'Commit = Closed + Commit; Probable = Commit FC + Probable + C&C; Upside = Probable FC + Upside'],
@@ -480,6 +480,10 @@ const CHANGELOG = [
 ]
 
 function AboutTab() {
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const currentEntry = CHANGELOG.find(e => e.current)
+  const olderEntries = CHANGELOG.filter(e => !e.current)
+
   return (
     <div>
       <Section title="About">
@@ -502,23 +506,56 @@ function AboutTab() {
 
       <Section title="Version history">
         <div className="flex flex-col divide-y divide-[var(--bdr2)]">
-          {CHANGELOG.map(entry => (
-            <div key={entry.version} className="py-4 first:pt-0">
+          {/* Current version — always visible */}
+          {currentEntry && (
+            <div className="py-4 first:pt-0">
               <div className="flex items-center gap-2 mb-2">
-                <span className={`text-[11px] font-[700] px-2 py-0.5 rounded-full border ${entry.current ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bdr2)]'}`}>
-                  {entry.version}
+                <span className="text-[11px] font-[700] px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
+                  {currentEntry.version}
                 </span>
-                <span className="text-[11px] text-[var(--tx2)]">{entry.date}</span>
+                <span className="text-[11px] text-[var(--tx2)]">{currentEntry.date}</span>
               </div>
               <ul className="flex flex-col gap-1.5">
-                {entry.items.map(([title, desc]) => (
+                {currentEntry.items.map(([title, desc]) => (
                   <li key={title} className="text-[12px] text-[var(--tx2)] pl-3 relative before:absolute before:left-0 before:content-['—'] before:opacity-40">
                     <strong className="text-[var(--tx)] font-[600]">{title}</strong> — {desc}
                   </li>
                 ))}
               </ul>
             </div>
-          ))}
+          )}
+
+          {/* Older versions — collapsible */}
+          <div className="pt-3">
+            <button
+              onClick={() => setHistoryOpen(o => !o)}
+              className="flex items-center gap-1.5 text-[11px] text-[var(--tx2)] hover:text-[var(--tx)] transition-colors cursor-pointer"
+            >
+              <span style={{ display: 'inline-block', transform: historyOpen ? 'rotate(90deg)' : '' }}>▶</span>
+              {historyOpen ? 'Hide' : 'Show'} older versions ({olderEntries.length})
+            </button>
+            {historyOpen && (
+              <div className="flex flex-col divide-y divide-[var(--bdr2)] mt-3">
+                {olderEntries.map(entry => (
+                  <div key={entry.version} className="py-4 first:pt-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-[700] px-2 py-0.5 rounded-full border bg-[var(--bg2)] text-[var(--tx2)] border-[var(--bdr2)]">
+                        {entry.version}
+                      </span>
+                      <span className="text-[11px] text-[var(--tx2)]">{entry.date}</span>
+                    </div>
+                    <ul className="flex flex-col gap-1.5">
+                      {entry.items.map(([title, desc]) => (
+                        <li key={title} className="text-[12px] text-[var(--tx2)] pl-3 relative before:absolute before:left-0 before:content-['—'] before:opacity-40">
+                          <strong className="text-[var(--tx)] font-[600]">{title}</strong> — {desc}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </Section>
     </div>

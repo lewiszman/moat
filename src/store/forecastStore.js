@@ -74,6 +74,7 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         probIncludesUpside: false,
         derived: {},
         importedData: null, importMeta: null, scopeSelected: null,
+        previousImportSnapshot: null,
         activeView: 'manager',
         forecastDefaults: { r_commit: 80, r_prob: 75, r_up: 50, r_pipe: 18, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
         fyStartMonth: 1,
@@ -107,6 +108,15 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         loadSnapshot:   (snap)   => set(s => { SNAPSHOT_KEYS.forEach(k => { if (snap[k]   !== undefined) s[k] = snap[k]   }); s.derived = computeDerived(s) }),
 
         setImportData: (records, meta) => set(s => {
+          // Save snapshot of current import for slippage detection on next import
+          if (s.importedData?.length) {
+            const snap = {}
+            s.importedData.forEach(d => {
+              const key = (d.f_opp_name || '').toLowerCase()
+              if (key) snap[key] = { closeDate: d.f_close_date || null, stage: d.f_stage || null }
+            })
+            s.previousImportSnapshot = snap
+          }
           s.importedData = records; s.importMeta = meta; s.scopeSelected = null
           const agg     = aggregateForecast(records)
           const monthly = calcMonthlyClosedBreakdown(records, s.fyStartMonth || 1)
@@ -148,6 +158,7 @@ function makeForecastStore(storeName, isNextQuarter = false) {
           m1_closed: s.m1_closed, m1_commit: s.m1_commit, m1_prob: s.m1_prob, m1_up: s.m1_up,
           m2_closed: s.m2_closed, m2_commit: s.m2_commit, m2_prob: s.m2_prob, m2_up: s.m2_up,
           m3_closed: s.m3_closed, m3_commit: s.m3_commit, m3_prob: s.m3_prob, m3_up: s.m3_up,
+          previousImportSnapshot: s.previousImportSnapshot,
         }),
         onRehydrateStorage: () => (state) => {
           if (state) {
@@ -278,6 +289,7 @@ export const useInspectorStore = create(
         systemPrompt: s.systemPrompt, coachingFocus: s.coachingFocus,
         usageLog: s.usageLog, aiEnabled: s.aiEnabled,
         groupBy: s.groupBy, sortBy: s.sortBy,
+        repResults: s.repResults, lastResult: s.lastResult,
       }),
     }
   )

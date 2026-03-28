@@ -127,7 +127,7 @@ export default function ShareModal({ onClose }) {
         {/* What's included summary */}
         <div className="px-5 pb-4 flex items-center justify-between">
           <div className="flex gap-1.5 flex-wrap">
-            {['Manager View', 'CQ inputs', 'Monthly', 'Rates', 'C&C'].map(tag => (
+            {['Manager Walk-Up', 'CQ inputs', 'Monthly', 'Rates', 'C&C'].map(tag => (
               <span
                 key={tag}
                 className="text-[9px] font-[700] uppercase tracking-wide px-2 py-0.5 rounded-full bg-[var(--bg2)] text-[var(--tx2)] border border-[var(--bdr2)]"

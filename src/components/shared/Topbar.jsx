@@ -4,9 +4,10 @@ import { useSessionStore } from '../../store/sessionStore'
 import { useDarkMode } from '../../hooks/useDarkMode'
 import AuthButton from './AuthButton'
 import SessionHistory from './SessionHistory'
+import { exportForecastPDF, exportInspectionPDF } from '../../lib/exportPdf.jsx'
 
 const VIEW_LABELS = {
-  manager: 'Manager View',
+  manager: 'Manager Walk-Up',
   inspector: 'Pipeline Inspector',
   dealback: 'Deal-Backing',
   settings: 'Settings',
@@ -21,8 +22,22 @@ export default function Topbar() {
   const saveSnapshot = useSessionStore(s => s.saveSnapshot)
   const saving      = useSessionStore(s => s.saving)
 
-  const [promptOpen, setPromptOpen] = useState(false)
-  const [snapLabel, setSnapLabel]   = useState('')
+  const [promptOpen, setPromptOpen]   = useState(false)
+  const [snapLabel, setSnapLabel]     = useState('')
+  const [pdfLoading, setPdfLoading]   = useState(false)
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true)
+    try {
+      if (activeView === 'inspector') {
+        await exportInspectionPDF()
+      } else {
+        await exportForecastPDF()
+      }
+    } finally {
+      setPdfLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     await saveSnapshot(snapLabel.trim() || null)
@@ -55,6 +70,19 @@ export default function Topbar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        {(activeView === 'manager' || activeView === 'inspector') && (
+          <button
+            onClick={handleDownloadPdf}
+            disabled={pdfLoading}
+            className="btn text-[11px] flex items-center gap-1"
+          >
+            <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            {pdfLoading ? 'Generating…' : activeView === 'inspector' ? 'Export PDF' : 'Download PDF'}
+          </button>
+        )}
+
         <button
           onClick={() => setDark(!dark)}
           className="btn text-[11px]"

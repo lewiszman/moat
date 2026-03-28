@@ -68,11 +68,15 @@ const CATEGORIES = [
   },
 ]
 
+// Arithmetic mirrors forecastStore.js calcForecast():
+//   fc_commit = closed + bk_c + cnc_prorated
+//   fc_prob   = fc_commit + bk_p + bk_u_in_prob   (no C&C — it's in Commit)
+//   fc_up     = fc_prob + (bk_u − bk_u_in_prob)
 const ARITHMETIC = [
-  { label: 'Commit FC',   formula: 'Closed + Commit × Rate',                          color: '#1a56db' },
-  { label: 'Probable FC', formula: 'Commit FC + Probable × Rate + C&C rev',           color: '#0d7c3d' },
-  { label: 'Upside FC',   formula: 'Probable FC + Upside × Rate',                     color: '#b45309' },
-  { label: 'Full FC',     formula: 'Upside FC + Pipeline × Rate',                     color: '#6b7280' },
+  { label: 'Commit FC',   formula: 'Closed + Commit bookings + C&C (prorated)',       color: '#1a56db' },
+  { label: 'Probable FC', formula: 'Commit FC + Probable bookings (+ ½ Upside if on)', color: '#0d7c3d' },
+  { label: 'Upside FC',   formula: 'Probable FC + Upside bookings (− ½ if folded in)', color: '#b45309' },
+  { label: 'Full FC',     formula: 'Upside FC + Pipeline bookings',                   color: '#6b7280' },
 ]
 
 function CategoryCard({ cat }) {

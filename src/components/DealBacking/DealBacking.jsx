@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { useForecastStore, useDealBackStore } from '../../store/forecastStore'
+import { useForecastStore, useDealBackStore, useQuarterStore } from '../../store/forecastStore'
 import { fmt } from '../../lib/fmt'
 
 const COLS = [
@@ -176,7 +176,7 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
         {/* Header */}
         <div className="px-4 pt-3 pb-2.5 border-b border-[var(--bdr2)]">
           <div className="text-[10px] font-[700] uppercase tracking-widest mb-1" style={{ color: col.accent }}>
-            {col.key === 'bench' ? col.label : `${col.label} Forecast`}
+            {col.label}
           </div>
           <div className="text-[22px] font-[700] leading-none mb-1" style={{ color: col.key === 'bench' ? 'var(--tx2)' : col.accent }}>
             {col.key === 'bench' ? fmt(colAmt) : fmt(cumTotal)}
@@ -213,15 +213,6 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
               {col.key === 'bench' ? 'Drag deals here to park them' : 'Drop deals here'}
             </div>
           )}
-          {deals.map(deal => (
-            <DealCard
-              key={deal.id}
-              deal={deal}
-              onDragStart={onDragStart}
-              onDragEnd={onDragEnd}
-              isMoved={positions[deal.id] && positions[deal.id] !== defaultCol(deal)}
-            />
-          ))}
           {cncInThisCol && (
             <CncCard
               onDragStart={onDragStart}
@@ -237,6 +228,15 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
               weeks_total={cncCard.weeks_total}
             />
           )}
+          {deals.map(deal => (
+            <DealCard
+              key={deal.id}
+              deal={deal}
+              onDragStart={onDragStart}
+              onDragEnd={onDragEnd}
+              isMoved={positions[deal.id] && positions[deal.id] !== defaultCol(deal)}
+            />
+          ))}
         </div>
       </div>
     </div>
@@ -251,7 +251,11 @@ export default function DealBacking() {
   const cnc_asp         = useForecastStore(s => s.cnc_asp)
   const r_cnc           = useForecastStore(s => s.r_cnc)
 
-  const { positions, move, reset, cncOverrides, setCncOverride, clearCncOverrides } = useDealBackStore()
+  const db  = useDealBackStore()
+  const aq  = useQuarterStore(s => s.activeQuarter)
+  const positions    = db[`positions_${aq}`]    || {}
+  const cncOverrides = db[`cncOverrides_${aq}`] || { opps: null, asp: null, rate: null }
+  const { move, reset, setCncOverride, clearCncOverrides } = db
   const [dragId, setDragId]     = React.useState(null)
   const [dragOver, setDragOver] = React.useState(null)
 
@@ -342,9 +346,9 @@ export default function DealBacking() {
           {[
             { label: 'Quota',       val: fmt(quota),       color: '' },
             { label: 'Closed Won',  val: fmt(closedAmt),   color: 'text-green-600' },
-            { label: 'DB Commit FC',   val: fmt(cumC),        color: 'text-blue-600' },
-            { label: 'DB Probable FC', val: fmt(cumP),        color: 'text-green-700' },
-            { label: 'DB Upside FC',   val: fmt(cumU),        color: 'text-amber-700' },
+            { label: 'DB Commit',    val: fmt(cumC),        color: 'text-blue-600' },
+            { label: 'DB Probable',  val: fmt(cumP),        color: 'text-green-700' },
+            { label: 'DB Upside',    val: fmt(cumU),        color: 'text-amber-700' },
             { label: 'Benched',     val: fmt(totals.bench), color: 'text-gray-500' },
           ].map((s, i) => (
             <React.Fragment key={s.label}>

@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useWowStore, useForecastStore } from '../../store/forecastStore'
+import React, { useState, useEffect } from 'react'
+import { useWowStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { fmt, parseMoney } from '../../lib/fmt'
 
 function DeltaBadge({ curr, prev }) {
@@ -35,16 +35,31 @@ function AccuracyBadge({ fcCommit, actual }) {
 export default function WowTracker() {
   const wow = useWowStore()
   const fs  = useForecastStore()
-  const [actualInput, setActualInput] = useState(
-    wow.actualClosedAtQuarterEnd != null ? String(wow.actualClosedAtQuarterEnd) : ''
-  )
+  const aq  = useQuarterStore(s => s.activeQuarter)
 
-  // Sorted newest first; delta compares to the next-older row (sorted[i+1])
-  const sorted = [...wow.snapshots].sort((a, b) => new Date(b.date) - new Date(a.date))
-
-  const saveActual = () => {
-    wow.setActualClosed(parseMoney(actualInput))
+  // Resolve actual closed for active quarter (supports legacy scalar + new object format)
+  const resolveActual = () => {
+    const raw = wow.actualClosedAtQuarterEnd
+    if (raw && typeof raw === 'object') return raw[aq] ?? null
+    if (typeof raw === 'number' && aq === 'cq') return raw
+    return null
   }
+  const actualClosed = resolveActual()
+
+  const [actualInput, setActualInput] = useState(actualClosed != null ? String(actualClosed) : '')
+
+  // Sync input when quarter or stored value changes
+  useEffect(() => {
+    const val = resolveActual()
+    setActualInput(val != null ? String(val) : '')
+  }, [aq, wow.actualClosedAtQuarterEnd])
+
+  // Filter to active quarter's snapshots (no quarterKey = legacy CQ)
+  const sorted = [...wow.snapshots]
+    .filter(s => (s.quarterKey ?? 'cq') === aq)
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+  const saveActual = () => wow.setActualClosed(parseMoney(actualInput))
 
   return (
     <div className="card overflow-hidden">
@@ -58,10 +73,7 @@ export default function WowTracker() {
             Take snapshot
           </button>
           {sorted.length > 0 && (
-            <button
-              onClick={wow.clearSnapshots}
-              className="btn text-[11px] text-[var(--tx2)]"
-            >
+            <button onClick={wow.clearSnapshots} className="btn text-[11px] text-[var(--tx2)]">
               Clear all
             </button>
           )}
@@ -74,16 +86,12 @@ export default function WowTracker() {
         </div>
       ) : (
         <>
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-[var(--bdr2)] bg-[var(--bg2)]">
                   {['Week', 'Date', 'Commit FC', 'Probable FC', 'Upside FC', 'Pipeline', 'Closed QTD', ''].map((h, i) => (
-                    <th
-                      key={i}
-                      className={`px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] ${i >= 2 && i <= 6 ? 'text-right' : 'text-left'}`}
-                    >
+                    <th key={i} className={`px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] ${i >= 2 && i <= 6 ? 'text-right' : 'text-left'}`}>
                       {h}
                     </th>
                   ))}
@@ -91,9 +99,9 @@ export default function WowTracker() {
               </thead>
               <tbody>
                 {sorted.map((snap, i) => {
-                  const prev    = sorted[i + 1]
-                  const isW2    = snap.week === 2
-                  const isW10   = snap.week === 10
+                  const prev      = sorted[i + 1]
+                  const isW2      = snap.week === 2
+                  const isW10     = snap.week === 10
                   const highlight = isW2 || isW10
                   return (
                     <tr
@@ -101,63 +109,44 @@ export default function WowTracker() {
                       className="border-b border-[var(--bdr2)] last:border-0"
                       style={highlight ? { background: 'rgba(26,86,219,0.05)' } : undefined}
                     >
-                      {/* Week */}
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className="font-[600] text-[var(--tx)]">W{snap.week}</span>
                         {isW2  && <span className="ml-1 text-[9px] font-[700] text-[#1a56db] bg-[#dbeafe] px-1 rounded">W2</span>}
                         {isW10 && <span className="ml-1 text-[9px] font-[700] text-[#1a56db] bg-[#dbeafe] px-1 rounded">W10</span>}
                         {snap.isAuto && <span className="ml-1 text-[9px] text-[var(--tx2)]">auto</span>}
                       </td>
-
-                      {/* Date */}
                       <td className="px-3 py-2 text-[var(--tx2)] whitespace-nowrap">
                         {new Date(snap.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                       </td>
-
-                      {/* Commit FC */}
                       <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_commit)}</span>
-                          {(isW2 || isW10) && (
-                            <AccuracyBadge fcCommit={snap.fc_commit} actual={wow.actualClosedAtQuarterEnd} />
-                          )}
+                          {(isW2 || isW10) && <AccuracyBadge fcCommit={snap.fc_commit} actual={actualClosed} />}
                         </div>
                         {prev && <DeltaBadge curr={snap.fc_commit} prev={prev.fc_commit} />}
                       </td>
-
-                      {/* Probable FC */}
                       <td className="px-3 py-2 text-right">
                         <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_probable)}</span>
                         {prev && <div><DeltaBadge curr={snap.fc_probable} prev={prev.fc_probable} /></div>}
                       </td>
-
-                      {/* Upside FC */}
                       <td className="px-3 py-2 text-right">
                         <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_upside)}</span>
                         {prev && <div><DeltaBadge curr={snap.fc_upside} prev={prev.fc_upside} /></div>}
                       </td>
-
-                      {/* Pipeline */}
                       <td className="px-3 py-2 text-right">
                         <span className="font-[600] text-[var(--tx)]">{fmt(snap.pipeline)}</span>
                         {prev && <div><DeltaBadge curr={snap.pipeline} prev={prev.pipeline} /></div>}
                       </td>
-
-                      {/* Closed QTD */}
                       <td className="px-3 py-2 text-right">
                         <span className="font-[600] text-[var(--tx)]">{fmt(snap.closed)}</span>
                         {prev && <div><DeltaBadge curr={snap.closed} prev={prev.closed} /></div>}
                       </td>
-
-                      {/* Delete */}
                       <td className="px-3 py-2 text-right">
                         <button
                           onClick={() => wow.deleteSnapshot(snap.id)}
                           className="text-[12px] text-[var(--tx2)] hover:text-[#dc2626] border-none bg-transparent cursor-pointer leading-none"
                           title="Delete snapshot"
-                        >
-                          ×
-                        </button>
+                        >×</button>
                       </td>
                     </tr>
                   )
@@ -166,7 +155,6 @@ export default function WowTracker() {
             </table>
           </div>
 
-          {/* Quarter-end actual input */}
           <div className="flex items-center gap-2 px-4 py-3 border-t border-[var(--bdr2)] bg-[var(--bg2)] flex-wrap">
             <span className="text-[11px] text-[var(--tx2)]">Quarter-end actual closed:</span>
             <span className="text-[var(--tx2)]">$</span>
@@ -179,9 +167,9 @@ export default function WowTracker() {
               className="w-28 text-[13px] font-[600] bg-transparent border-b border-[var(--bdr2)] focus:border-[var(--blue)] outline-none py-0.5"
             />
             <button onClick={saveActual} className="btn text-[11px]">Save</button>
-            {wow.actualClosedAtQuarterEnd != null && (
+            {actualClosed != null && (
               <span className="text-[11px] text-[var(--tx2)]">
-                Saved: <strong className="text-[var(--tx)]">{fmt(wow.actualClosedAtQuarterEnd)}</strong>
+                Saved: <strong className="text-[var(--tx)]">{fmt(actualClosed)}</strong>
                 {' '}— W2/W10 rows show forecast accuracy
               </span>
             )}

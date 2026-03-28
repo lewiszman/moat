@@ -1,37 +1,53 @@
 import React, { useMemo } from 'react'
-import { useForecastStore } from '../../store/forecastStore'
+import { useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { getFiscalQuarterInfo, sellDaysRemaining, getWeekNumber } from '../../lib/fmt'
 
 export default function QuarterStatusBar() {
-  const fyStart    = useForecastStore(s => s.fyStartMonth) || 1
-  const quota      = useForecastStore(s => s.quota) || 0
+  const fyStart       = useForecastStore(s => s.fyStartMonth) || 1
+  const activeQuarter = useQuarterStore(s => s.activeQuarter)
 
   const info = useMemo(() => {
     const now     = new Date()
-    const qInfo   = getFiscalQuarterInfo('current', fyStart)
     const weekNum = getWeekNumber(now)
+    const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
 
-    const daysLeft = sellDaysRemaining(now, qInfo.qEndDate)
+    // Always compute current quarter first — Q+1 dates derive from its end
+    const cqInfo = getFiscalQuarterInfo('current', fyStart)
 
-    // Q end date formatted
-    const qEndStr = qInfo.qEndDate
-      ? qInfo.qEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    let label, qEndDate, daysLeft, elapsedPct
+
+    if (activeQuarter === 'q1') {
+      // Next quarter starts the day after CQ ends
+      const nextQStart = new Date(cqInfo.qEndDate)
+      nextQStart.setDate(nextQStart.getDate() + 1)
+      // Next quarter ends 3 months later (last day of that month)
+      const nextQEnd = new Date(nextQStart.getFullYear(), nextQStart.getMonth() + 3, 0)
+
+      label    = getFiscalQuarterInfo('next', fyStart).label
+      qEndDate = nextQEnd
+      // Full quarter selling days: from one day before Q+1 day-1 through Q+1 last day
+      daysLeft = sellDaysRemaining(new Date(nextQStart.getTime() - 1), nextQEnd)
+      elapsedPct = 0
+    } else {
+      label    = cqInfo.label
+      qEndDate = cqInfo.qEndDate
+      daysLeft = sellDaysRemaining(now, qEndDate)
+      const TOTAL_SELL_DAYS = 65
+      const elapsed = Math.max(0, TOTAL_SELL_DAYS - daysLeft)
+      elapsedPct = Math.min(100, Math.round((elapsed / TOTAL_SELL_DAYS) * 100))
+    }
+
+    const qEndStr = qEndDate
+      ? qEndDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : null
 
-    const dateStr = now.toLocaleDateString('en-US', {
-      weekday: 'short', month: 'short', day: 'numeric',
-    })
+    return { label, weekNum, daysLeft, qEndStr, dateStr, elapsedPct }
+  }, [fyStart, activeQuarter])
 
-    // Elapsed selling days as a % (approximate: assume 65 total selling days in a quarter)
-    const TOTAL_SELL_DAYS = 65
-    const elapsed = Math.max(0, TOTAL_SELL_DAYS - daysLeft)
-    const elapsedPct = Math.min(100, Math.round((elapsed / TOTAL_SELL_DAYS) * 100))
-
-    return { ...qInfo, weekNum, daysLeft, qEndStr, dateStr, elapsedPct }
-  }, [fyStart])
-
-  const urgency = info.daysLeft <= 5  ? 'critical'
-                : info.daysLeft <= 15 ? 'warn'
+  // Urgency coloring only applies to current quarter
+  const urgency = activeQuarter === 'q1' ? 'ok'
+                : info.daysLeft <= 5     ? 'critical'
+                : info.daysLeft <= 15    ? 'warn'
                 : 'ok'
 
   const urgencyColor = {

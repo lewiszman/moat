@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react'
-import { useForecastStore, useInspectorStore } from '../../store/forecastStore'
+import { useForecastStore, useInspectorStore, useSectionComments } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { flagDeal, groupByRep, dealWeight, FLAG_DEF_LIST } from '../../lib/flags'
-import { fetchAISummary, fetchManagerInsights, findDealAction, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
+import { fetchAISummary, fetchManagerInsights, findDealAction, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { formatSlackMessage } from '../../lib/slackFormatter'
 import { fmt } from '../../lib/fmt'
 
@@ -29,7 +29,16 @@ function buildGroups(deals, groupBy) {
       byRep[o].push(d)
     })
     return Object.entries(byRep)
-      .map(([owner, ds]) => ({ key: owner, label: owner, accent: '#6b7280', deals: ds }))
+      .map(([owner, ds]) => ({
+        key: owner, label: owner, accent: '#6b7280',
+        deals: ds,
+        subGroups: CAT_ORDER
+          .map(cat => ({
+            key: cat, label: CAT_LABEL[cat], accent: CAT_ACCENT[cat],
+            deals: ds.filter(d => d.f_fc_cat_norm === cat),
+          }))
+          .filter(sg => sg.deals.length > 0),
+      }))
       .sort((a, b) =>
         b.deals.reduce((s, d) => s + dealWeight(d), 0) -
         a.deals.reduce((s, d) => s + dealWeight(d), 0)
@@ -162,7 +171,13 @@ function DealRow({ deal, cols, repResult }) {
   const cdNear   = cd && !cdPast && (cd - now) / 86400000 <= 14
   const cdStr    = cd ? cd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
   const nsStr    = (deal.f_next_step || '—').substring(0, 60) + (deal.f_next_step?.length > 60 ? '…' : '')
-  const aiAction = findDealAction(repResult?.actions, deal.f_opp_name)
+  const aiAction = findDealAction(repResult?.aiFlags, deal.f_opp_name)
+  const daysSinceActivity = deal.f_last_activity
+    ? Math.floor((now - new Date(deal.f_last_activity)) / 86400000)
+    : null
+  const noteKey  = `insp_deal_${(deal.f_opp_name || '').toLowerCase()}`
+  const { comments, setComment } = useSectionComments()
+  const noteVal  = comments[noteKey] || ''
 
   return (
     <tr className={`border-b border-[var(--bdr2)] last:border-0 hover:bg-[var(--bg2)] transition-colors ${hasCrit ? 'bg-red-50/30 dark:bg-red-950/10' : ''}`}>
@@ -172,6 +187,11 @@ function DealRow({ deal, cols, repResult }) {
       {cols.close    && (
         <td className={`px-3 py-2 text-[12px] whitespace-nowrap font-[500] ${cdPast ? 'text-red-600' : cdNear ? 'text-amber-600' : 'text-[var(--tx2)]'}`}>
           {cdStr}
+          {deal._slippageDays > 0 && (
+            <span className="ml-1.5 text-[9px] font-[700] uppercase tracking-wide text-amber-700 bg-amber-100 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full border border-amber-300 dark:border-amber-700">
+              +{deal._slippageDays}d
+            </span>
+          )}
         </td>
       )}
       {cols.stage    && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] whitespace-nowrap max-w-[120px] truncate" title={deal.f_stage}>{deal.f_stage || '—'}</td>}
@@ -182,7 +202,16 @@ function DealRow({ deal, cols, repResult }) {
           </span>
         </td>
       )}
-      {cols.nextstep && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] max-w-[200px]" title={deal.f_next_step || ''}>{nsStr}</td>}
+      {cols.nextstep && (
+        <td className="px-3 py-2 text-[11px] text-[var(--tx2)] max-w-[200px]" title={deal.f_next_step || ''}>
+          {nsStr}
+          {daysSinceActivity !== null && daysSinceActivity >= 7 && (
+            <div className={`text-[9px] font-[600] mt-0.5 ${daysSinceActivity >= 14 ? 'text-red-500' : 'text-amber-500'}`}>
+              {daysSinceActivity}d since activity
+            </div>
+          )}
+        </td>
+      )}
       {cols.flags    && (
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-1">
@@ -197,21 +226,73 @@ function DealRow({ deal, cols, repResult }) {
         <td className="px-3 py-2 text-[11px] text-[var(--tx)]">
           {repResult?.loading
             ? <span className="flex gap-1">{[0,200,400].map(d => <span key={d} className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--blue)] animate-pulse" style={{ animationDelay: `${d}ms` }} />)}</span>
-            : aiAction
-              ? <span className="text-purple-700 dark:text-purple-300">{aiAction}</span>
-              : repResult?.error
-                ? <span className="text-red-500 text-[10px]">Error</span>
+            : repResult?.error
+              ? <span className="text-red-500 text-[10px]" title={repResult.error}>⚠ {repResult.error.slice(0, 40)}</span>
+              : aiAction
+                ? <span className="text-purple-700 dark:text-purple-300"><span className="font-[600]">{aiAction.flag}</span>{aiAction.note ? ` — ${aiAction.note}` : ''}</span>
                 : null
           }
+        </td>
+      )}
+      {cols.note && (
+        <td className="px-3 py-2 min-w-[140px]">
+          <input
+            type="text"
+            value={noteVal}
+            onChange={e => setComment(noteKey, e.target.value)}
+            placeholder="Add note…"
+            className="w-full text-[11px] bg-transparent border-0 border-b border-dashed border-[var(--bdr2)] focus:border-[var(--blue)] outline-none text-[var(--tx)] placeholder:text-[var(--tx2)]/50 py-0.5"
+          />
         </td>
       )}
     </tr>
   )
 }
 
+// ── Rep scorecard ─────────────────────────────────────────────
+
+function RepScorecard({ owner, deals, repResult }) {
+  const pipe      = deals.reduce((s, d) => s + (d.f_amount_num || 0), 0)
+  const critCount = deals.flatMap(d => d._flags || []).filter(f => f.sev === 'critical').length
+  const cleanCount = deals.filter(d => (d._flags || []).length === 0).length
+  const hygiene   = deals.length > 0 ? Math.round((cleanCount / deals.length) * 100) : 100
+  const cats      = { commit: 0, probable: 0, upside: 0, pipeline: 0 }
+  deals.forEach(d => { if (cats[d.f_fc_cat_norm] !== undefined) cats[d.f_fc_cat_norm]++ })
+
+  return (
+    <tr className="bg-[var(--bg2)]/60 border-b border-[var(--bdr2)]">
+      <td colSpan={99} className="px-4 py-2">
+        <div className="flex items-center gap-4 flex-wrap text-[11px]">
+          <span className="font-[700] text-[var(--tx)] text-[12px]">{owner}</span>
+          <span className="text-[var(--tx2)]">{fmt(pipe)}</span>
+          <span className="text-[var(--tx2)]">{deals.length} deal{deals.length !== 1 ? 's' : ''}</span>
+          <div className="flex items-center gap-1.5">
+            {cats.commit   > 0 && <span className="text-[10px] font-[700] text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">{cats.commit}C</span>}
+            {cats.probable > 0 && <span className="text-[10px] font-[700] text-green-700 bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 rounded">{cats.probable}P</span>}
+            {cats.upside   > 0 && <span className="text-[10px] font-[700] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">{cats.upside}U</span>}
+            {cats.pipeline > 0 && <span className="text-[10px] font-[700] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">{cats.pipeline}Pp</span>}
+          </div>
+          {critCount > 0
+            ? <span className="text-red-600 font-[700]">🔴 {critCount} critical</span>
+            : <span className="text-green-600 font-[600]">✓ no criticals</span>
+          }
+          <span className={`font-[600] ${hygiene >= 80 ? 'text-green-600' : hygiene >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
+            {hygiene}% hygiene
+          </span>
+          {repResult?.summary && (
+            <span className="text-purple-700 dark:text-purple-300 italic truncate max-w-[300px]" title={repResult.summary}>
+              ✨ {repResult.summary}
+            </span>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
 // ── Group header row ──────────────────────────────────────────
 
-function GroupHeader({ group, colCount, collapsed, onToggle, showAE }) {
+function GroupHeader({ group, colCount, collapsed, onToggle, showAE, onCopy }) {
   const total = group.deals.reduce((s, d) => s + (d.f_amount_num || 0), 0)
   const crit  = group.deals.flatMap(d => d._flags || []).filter(f => f.sev === 'critical').length
   const warn  = group.deals.flatMap(d => d._flags || []).filter(f => f.sev === 'warn').length
@@ -236,6 +317,15 @@ function GroupHeader({ group, colCount, collapsed, onToggle, showAE }) {
           {crit > 0 && <span className="text-[10px] font-[700] text-red-600">🔴 {crit}</span>}
           {warn > 0 && <span className="text-[10px] font-[600] text-amber-600">🟡 {warn}</span>}
           {crit === 0 && warn === 0 && <span className="text-[10px] font-[600] text-green-600">✓ clean</span>}
+          {onCopy && (
+            <button
+              onClick={e => { e.stopPropagation(); onCopy(group) }}
+              className="ml-auto text-[10px] btn py-0.5 px-2"
+              title="Copy this group to clipboard"
+            >
+              Copy
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -244,13 +334,32 @@ function GroupHeader({ group, colCount, collapsed, onToggle, showAE }) {
 
 // ── Table ─────────────────────────────────────────────────────
 
-function InspectorTable({ groups, cols, repResults, collapsed, onToggle }) {
+function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy }) {
   const visibleCols = Object.entries(cols).filter(([, v]) => v).map(([k]) => k)
   const colCount    = visibleCols.length
 
   const COL_HEADERS = {
     ae: 'AE', deal: 'Deal', amount: 'Amount', close: 'Close',
-    stage: 'Stage', fc: 'FC', nextstep: 'Next Step', flags: 'Flags', aiaction: 'AI Action',
+    stage: 'Stage', fc: 'FC', nextstep: 'Next Step',
+    flags: 'Rules Based Flags', aiaction: 'AI Flags', note: 'Manager Note',
+  }
+
+  const copyGroup = async (group) => {
+    const lines = [`*${group.label}* — ${group.deals.length} deal(s)`]
+    group.deals.forEach(d => {
+      const flags = (d._flags || []).map(f => f.label).join(', ')
+      lines.push(`• ${d.f_opp_name || 'Unknown'} — ${d.f_amount_num ? `$${Math.round(d.f_amount_num / 1000)}k` : ''} ${flags ? `[${flags}]` : ''}`.trim())
+    })
+    const text = lines.join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const blob = new Blob([text], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = `moat-group-${group.key}.txt`; a.click()
+      URL.revokeObjectURL(url)
+    }
   }
 
   return (
@@ -275,15 +384,47 @@ function InspectorTable({ groups, cols, repResults, collapsed, onToggle }) {
                   collapsed={!!collapsed[group.key]}
                   onToggle={() => onToggle(group.key)}
                   showAE={cols.ae}
+                  onCopy={copyGroup}
                 />
-                {!collapsed[group.key] && group.deals.map((deal, i) => (
-                  <DealRow
-                    key={`${deal._owner}-${deal.f_opp_name}-${i}`}
-                    deal={deal}
-                    cols={cols}
-                    repResult={repResults[deal._owner]}
+                {groupBy === 'rep' && group.label && (
+                  <RepScorecard
+                    owner={group.key}
+                    deals={group.deals}
+                    repResult={repResults[group.key]}
                   />
-                ))}
+                )}
+                {!collapsed[group.key] && (
+                  group.subGroups
+                    ? group.subGroups.map(sg => (
+                        <React.Fragment key={`${group.key}-${sg.key}`}>
+                          <tr className="bg-[var(--bg2)]/50">
+                            <td colSpan={colCount} className="px-5 py-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className="w-1 h-3 rounded-sm flex-shrink-0" style={{ background: sg.accent }} />
+                                <span className="text-[10px] font-[700] uppercase tracking-wide" style={{ color: sg.accent }}>{sg.label}</span>
+                                <span className="text-[10px] text-[var(--tx2)]">{sg.deals.length} deal{sg.deals.length !== 1 ? 's' : ''}</span>
+                              </div>
+                            </td>
+                          </tr>
+                          {sg.deals.map((deal, i) => (
+                            <DealRow
+                              key={`${deal._owner}-${deal.f_opp_name}-${i}`}
+                              deal={deal}
+                              cols={cols}
+                              repResult={repResults[deal._owner]}
+                            />
+                          ))}
+                        </React.Fragment>
+                      ))
+                    : group.deals.map((deal, i) => (
+                        <DealRow
+                          key={`${deal._owner}-${deal.f_opp_name}-${i}`}
+                          deal={deal}
+                          cols={cols}
+                          repResult={repResults[deal._owner]}
+                        />
+                      ))
+                )}
               </React.Fragment>
             ))}
           </tbody>
@@ -444,6 +585,7 @@ const ALL_COLS = [
   { id: 'nextstep', label: 'Next Step' },
   { id: 'flags',    label: 'Flags'     },
   { id: 'aiaction', label: 'AI Action' },
+  { id: 'note',     label: 'Note'      },
 ]
 
 function ColPicker({ visible, onChange }) {
@@ -498,12 +640,42 @@ export default function Inspector() {
   const [focusOpen,   setFocusOpen]   = useState(false)
   const [colsVisible, setColsVisible] = useState({
     ae: true, deal: true, amount: true, close: true,
-    stage: true, fc: true, nextstep: true, flags: true, aiaction: false,
+    stage: true, fc: true, nextstep: true, flags: true, aiaction: false, note: false,
   })
   const abortRef = useRef(null)
   const slackRef = useRef(null)
   const [runError,      setRunError]      = React.useState(null)
   const [localRunning,  setLocalRunning]  = React.useState(false)
+
+  // Restore from persisted lastResult on mount (so navigating away and back doesn't clear results)
+  React.useEffect(() => {
+    const lr = insp.lastResult
+    if (!lr?.active?.length || allDeals.length > 0) return
+    const byRep = {}
+    lr.active.forEach(d => {
+      const o = d._owner || 'Unknown'
+      if (!byRep[o]) byRep[o] = []
+      byRep[o].push(d)
+    })
+    const sorted = Object.entries(byRep).sort(([, a], [, b]) =>
+      b.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0) -
+      a.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0)
+    )
+    setAllDeals(lr.active)
+    setRepsSorted(sorted)
+    const allFlags  = lr.active.flatMap(d => d._flags || [])
+    const aesWithCrit = sorted.filter(([, deals]) =>
+      deals.flatMap(d => d._flags || []).some(f => f.sev === 'critical')
+    ).length
+    setStats({
+      aes: sorted.length,
+      deals: lr.active.length,
+      pipe: lr.active.reduce((s, d) => s + d.f_amount_num, 0),
+      crit: allFlags.filter(f => f.sev === 'critical').length,
+      warn: allFlags.filter(f => f.sev === 'warn').length,
+      aesWithCrit,
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Effective column visibility — aiaction auto-shows when AI is on
   const effectiveCols = useMemo(() => ({
@@ -558,9 +730,19 @@ export default function Inspector() {
 
     let started = false
     try {
+      const prevSnap = useForecastStore.getState().previousImportSnapshot || {}
       const active = importedData
         .filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
-        .map(d => ({ ...d, _owner: d.f_owner || 'Unknown', _flags: flagDeal(d) }))
+        .map(d => {
+          const key = (d.f_opp_name || '').toLowerCase()
+          const prev = prevSnap[key]
+          let slippageDays = 0
+          if (prev?.closeDate && d.f_close_date) {
+            const delta = Math.round((new Date(d.f_close_date) - new Date(prev.closeDate)) / 86400000)
+            if (delta > 0) slippageDays = delta
+          }
+          return { ...d, _owner: d.f_owner || 'Unknown', _flags: flagDeal(d), _slippageDays: slippageDays }
+        })
       console.log('[Inspector] active deals:', active.length, 'of', importedData.length)
 
       const allFlags   = active.flatMap(d => d._flags)
@@ -610,7 +792,7 @@ export default function Inspector() {
             owner, deals, apiKey: runApiKey,
             systemPrompt: runPrompt, coachingFocus: runFocus, signal: ac.signal,
           })
-          setRepResult(owner, { summary: result.summary, actions: result.actions })
+          setRepResult(owner, { summary: result.summary, actions: result.actions, aiFlags: result.flags || {} })
           totalIn  += result.inputTokens
           totalOut += result.outputTokens
         } catch (err) {
@@ -676,7 +858,7 @@ export default function Inspector() {
       <div className="flex flex-col items-center justify-center h-64 text-[var(--tx2)]">
         <div className="text-4xl mb-3">🔍</div>
         <div className="text-[15px] font-[600] text-[var(--tx)] mb-1">No data</div>
-        <div className="text-[13px]">Import your pipeline CSV from Manager View first.</div>
+        <div className="text-[13px]">Import your pipeline CSV from Manager Walk-Up first.</div>
       </div>
     )
   }
@@ -871,6 +1053,7 @@ export default function Inspector() {
           repResults={insp.repResults}
           collapsed={collapsed}
           onToggle={key => setCollapsed(p => ({ ...p, [key]: !p[key] }))}
+          groupBy={insp.groupBy}
         />
       )}
 
