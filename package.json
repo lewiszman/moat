@@ -7,8 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy:staging": "VITE_BASE=/moat/staging/ vite build && gh-pages -d dist --dest staging --add",
+    "deploy:prod": "vite build && gh-pages -d dist"
   },
   "dependencies": {
     "@react-pdf/renderer": "^3.4.4",
@@ -17,6 +17,7 @@
     "immer": "^10.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "papaparse": "^5.4.1",
     "xlsx": "^0.18.5",
     "zustand": "^4.5.2"
   },

@@ -47,7 +47,8 @@ export const useSessionStore = create((set, get) => ({
 
   // Restore: fetch snapshot from Supabase and merge into forecast store
   restoreSession: async (sessionId) => {
-    const { data, error } = await fetchSession(sessionId)
+    const { user } = get()
+    const { data, error } = await fetchSession(sessionId, user?.id)
     if (error || !data?.snapshot) return
     useForecastStore.getState().loadSnapshot(data.snapshot)
   },
@@ -56,7 +57,7 @@ export const useSessionStore = create((set, get) => ({
   deleteSession: async (sessionId) => {
     const { user } = get()
     if (!user) return
-    await deleteSession(sessionId)
+    await deleteSession(sessionId, user.id)
     get().loadSessions()
   },
 }))

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react'
+import Papa from 'papaparse'
 import { useForecastStore } from '../../store/forecastStore'
 import { normalizeRecords } from '../../lib/import'
 
@@ -44,27 +45,6 @@ function autoDetectMap(headers) {
   return map
 }
 
-function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/)
-  if (lines.length < 2) return { headers: [], rows: [] }
-  const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g, '').trim())
-  const rows = lines.slice(1).map(line => {
-    // Handle quoted fields with commas inside
-    const vals = []
-    let cur = '', inQ = false
-    for (let c of line) {
-      if (c === '"') { inQ = !inQ }
-      else if (c === ',' && !inQ) { vals.push(cur.trim()); cur = '' }
-      else cur += c
-    }
-    vals.push(cur.trim())
-    const row = {}
-    headers.forEach((h, i) => { row[h] = vals[i] || '' })
-    return row
-  })
-  return { headers, rows }
-}
-
 export default function ImportWizard({ onClose }) {
   const setImportData = useForecastStore(s => s.setImportData)
   const clearImport = useForecastStore(s => s.clearImport)
@@ -78,15 +58,18 @@ export default function ImportWizard({ onClose }) {
 
   const processFile = useCallback((file) => {
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const { headers, rows } = parseCSV(e.target.result)
-      const detected = autoDetectMap(headers)
-      setParsed({ filename: file.name, headers, rows })
-      setColMap(detected)
-      setStep(1)
-    }
-    reader.readAsText(file)
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const headers = results.meta.fields || []
+        const rows    = results.data
+        const detected = autoDetectMap(headers)
+        setParsed({ filename: file.name, headers, rows })
+        setColMap(detected)
+        setStep(1)
+      },
+    })
   }, [])
 
   const handleDrop = (e) => {

@@ -6,6 +6,11 @@ import { fmt } from '../../lib/fmt'
 
 const TABS = ['General', 'Defaults', 'Inspector', 'Usage', 'About']
 
+function isValidHttpsUrl(url) {
+  if (!url) return true // empty = cleared, allowed
+  try { return new URL(url).protocol === 'https:' } catch { return false }
+}
+
 function TabBar({ active, onChange }) {
   return (
     <div className="flex border-b border-[var(--bdr2)] mb-6">
@@ -55,10 +60,24 @@ function Row({ label, sub, children }) {
 // ── General tab ────────────────────────────────────────────────
 function GeneralTab() {
   const s = useForecastStore()
+  const [sfdcInput, setSfdcInput]   = useState(s.sfdcUrl || '')
+  const [sfdcError, setSfdcError]   = useState('')
+
+  const handleSfdcChange = (e) => {
+    const val = e.target.value
+    setSfdcInput(val)
+    if (isValidHttpsUrl(val)) {
+      setSfdcError('')
+      s.setField('sfdcUrl', val)
+    } else {
+      setSfdcError('URL must start with https://')
+    }
+  }
 
   const handleClear = () => {
     if (!confirm('Clear all saved data? Forecast inputs will be reset.')) return
-    localStorage.clear()
+    const MOAT_KEYS = ['moat-forecast-cq','moat-forecast-q1','moat-active-quarter','moat-inspector-v27','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','rail_expanded','theme']
+    MOAT_KEYS.forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
 
@@ -66,12 +85,15 @@ function GeneralTab() {
     <div>
       <Section title="Salesforce">
         <Row label="Report URL" sub="Used for the 'Open in Salesforce' link">
-          <input
-            className="w-72 text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
-            value={s.sfdcUrl || ''}
-            onChange={e => s.setField('sfdcUrl', e.target.value)}
-            placeholder="https://..."
-          />
+          <div className="flex flex-col items-end gap-1">
+            <input
+              className={`w-72 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${sfdcError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
+              value={sfdcInput}
+              onChange={handleSfdcChange}
+              placeholder="https://..."
+            />
+            {sfdcError && <span className="text-[11px] text-red-500">{sfdcError}</span>}
+          </div>
         </Row>
       </Section>
       <Section title="Fiscal year">
@@ -196,7 +218,7 @@ function InspectorTab() {
   return (
     <div>
       <Section title="Anthropic API key">
-        <Row label="API key" sub="Stored in your browser only — never sent to Supabase or shared.">
+        <Row label="API key" sub="Stored in session storage only — cleared when this tab closes. Never sent to Supabase or shared.">
           <div className="flex items-center gap-2">
             <input
               type={showKey ? 'text' : 'password'}
@@ -315,7 +337,7 @@ function FeedbackForm() {
   const handleSend = () => {
     if (!message.trim()) return
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    const body  = `${message}\n\n---\nVersion: v2.8 | ${today}`
+    const body  = `${message}\n\n---\nVersion: v3.0 | ${today}`
     const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
     window.location.href = href
     setSent(true)
@@ -363,9 +385,26 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
-    version: 'v2.9',
+    version: 'v3.0',
     date: 'Mar 2026',
     current: true,
+    items: [
+      ['Quarter management rebuilt', 'CQ and Q+1 are fully independent forecast states — all inputs, pipeline, monthly breakdown, C&C, WoW snapshots, and Deal-Backing positions isolated per quarter'],
+      ['C&C proration quarter-aware', 'CQ prorates by weeks remaining; Q+1 uses full quarter value'],
+      ['WoW snapshots scoped per quarter', 'Tracker and accuracy badges show history for active quarter only'],
+      ['Deal-Backing quarter-scoped', 'Positions and C&C card scoped per quarter; C&C card position bug fixed'],
+      ['SFDC report link fixed', 'Opens in new tab with noopener; correctly disabled when URL not set'],
+      ['Inspector — columns renamed', 'Flags → Rules Based Flags; AI Action → AI Flags'],
+      ['Inspector — AI Flags on next steps', 'AI assesses next step quality: missing date, past date, not tangible, weak next step; actual error messages surfaced in UI'],
+      ['Inspector — AE grouping with FC sub-groups', 'When grouped by AE, deals are sub-grouped by FC category (Commit → Probable → Upside → Pipeline)'],
+      ['Inspector — per-group Slack copy', 'Copy button on each group header for targeted Slack messages'],
+      ['Quarter-end mode removed permanently', 'Fire emoji, flames animation, and QE button removed from sidebar'],
+    ],
+  },
+  {
+    version: 'v2.9',
+    date: 'Mar 2026',
+    current: false,
     items: [
       ['Q+1 mode removed', 'Forecast inputs, snapshots, and tracker are current quarter only; quarter label remains manually editable'],
       ['Deal-Backing columns renamed', 'Deal-Backed Commit, Deal-Backed Probable, Deal-Backed Upside for clearer distinction from Manager View tiers'],
@@ -447,7 +486,7 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v2.8'],
+            ['Version', 'v3.0'],
             ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],

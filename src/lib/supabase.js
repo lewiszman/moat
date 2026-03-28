@@ -9,7 +9,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 export function signInWithGoogle() {
   return supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.href },
+    options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
   })
 }
 
@@ -105,15 +105,17 @@ export async function listSessions(userId, limit = 20) {
 }
 
 // Fetch the full snapshot for a specific session (for restore)
-export async function fetchSession(sessionId) {
-  return supabase
-    .from('sessions')
-    .select('snapshot')
-    .eq('id', sessionId)
-    .single()
+// userId is required as defence-in-depth alongside Supabase RLS
+export async function fetchSession(sessionId, userId) {
+  let q = supabase.from('sessions').select('snapshot').eq('id', sessionId)
+  if (userId) q = q.eq('user_id', userId)
+  return q.single()
 }
 
 // Delete a session row
-export async function deleteSession(sessionId) {
-  return supabase.from('sessions').delete().eq('id', sessionId)
+// userId is required as defence-in-depth alongside Supabase RLS
+export async function deleteSession(sessionId, userId) {
+  let q = supabase.from('sessions').delete().eq('id', sessionId)
+  if (userId) q = q.eq('user_id', userId)
+  return q
 }

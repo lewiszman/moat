@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useForecastStore } from '../../store/forecastStore'
+import { useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
 import CncWhatIf from './CncWhatIf'
@@ -29,15 +29,22 @@ function ImportModal({ onClose }) {
 }
 
 export default function ManagerView() {
-  const s = useForecastStore()
-  const [importOpen, setImportOpen]   = useState(false)
-  const [shareOpen,  setShareOpen]    = useState(false)
+  const s  = useForecastStore()
+  const qs = useQuarterStore()
+  const [importOpen, setImportOpen] = useState(false)
+  const [shareOpen,  setShareOpen]  = useState(false)
 
   const handlePrint = () => {
     document.body.setAttribute('data-printing', 'forecast')
     window.print()
     setTimeout(() => document.body.removeAttribute('data-printing'), 1000)
   }
+
+  const sfdcUrl = s.sfdcUrl || ''
+  const sfdcEnabled = (() => {
+    if (!sfdcUrl) return false
+    try { return new URL(sfdcUrl).protocol === 'https:' } catch { return false }
+  })()
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
@@ -47,6 +54,26 @@ export default function ManagerView() {
 
       {/* Hero header */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {/* CQ / Q+1 toggle */}
+        <div className="flex items-center bg-[var(--bg2)] border border-[var(--bdr2)] rounded-lg p-0.5 gap-0.5">
+          {[
+            { key: 'cq',  label: 'CQ'  },
+            { key: 'q1',  label: 'Q+1' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => qs.setActiveQuarter(key)}
+              className={`text-[11px] font-[700] px-2.5 py-1 rounded-md transition-colors border-none cursor-pointer ${
+                qs.activeQuarter === key
+                  ? 'bg-[var(--blue)] text-white'
+                  : 'bg-transparent text-[var(--tx2)] hover:text-[var(--tx)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <span className="text-[11px] font-[700] uppercase tracking-widest text-[var(--tx2)]">Forecast</span>
         <span className="text-[var(--tx2)]">·</span>
         <input
@@ -84,7 +111,7 @@ export default function ManagerView() {
             Share
           </button>
 
-          {/* PDF print */}
+          {/* PDF */}
           <button
             onClick={handlePrint}
             className="btn text-[11px] flex items-center gap-1.5 no-print"
@@ -98,9 +125,9 @@ export default function ManagerView() {
 
           {/* SFDC quick link */}
           <button
-            onClick={() => s.sfdcUrl && window.open(s.sfdcUrl, '_blank')}
-            disabled={!s.sfdcUrl}
-            title={s.sfdcUrl ? 'Open pipeline report in Salesforce' : 'Set your SFDC report URL in Settings'}
+            onClick={() => sfdcEnabled && window.open(sfdcUrl, '_blank', 'noopener,noreferrer')}
+            disabled={!sfdcEnabled}
+            title={sfdcEnabled ? 'Open pipeline report in Salesforce' : 'Set your SFDC report URL in Settings'}
             className="btn text-[11px] flex items-center gap-1.5"
           >
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -168,11 +195,8 @@ export default function ManagerView() {
       </div>
       <WowTracker />
 
-      {/* Modals */}
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
       {shareOpen  && <ShareModal  onClose={() => setShareOpen(false)} />}
-
-      {/* Hidden PDF root — visible only during print */}
       <PdfRoot />
     </div>
   )
