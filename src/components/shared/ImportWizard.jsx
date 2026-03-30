@@ -28,8 +28,8 @@ function autoDetectMap(headers) {
   headers.forEach(h => {
     const hl = h.toLowerCase().trim()
     if (/opportunity.?name|opp.?name/i.test(hl))  map[h] = 'f_opp_name'
-    else if (/^owner$|account.?owner|opp.?owner/i.test(hl)) map[h] = 'f_owner'
-    else if (/^amount$|arr|acv/i.test(hl))         map[h] = 'f_amount'
+    else if (/^owner$|account.?owner|opp.?owner|opportunity.?owner/i.test(hl)) map[h] = 'f_owner'
+    else if (/^amount$|arr|acv|average.?annual.?booking/i.test(hl)) map[h] = 'f_amount'
     else if (/close.?date/i.test(hl))              map[h] = 'f_close_date'
     else if (/^stage$/i.test(hl))                  map[h] = 'f_stage'
     else if (/forecast.?cat/i.test(hl))            map[h] = 'f_fc_cat'
