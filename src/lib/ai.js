@@ -127,7 +127,7 @@ export async function fetchAISummary({
       'anthropic-beta': 'prompt-caching-2024-07-31',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 600,
       system: [{ type: 'text', text: fullPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
@@ -174,7 +174,7 @@ export async function fetchManagerInsights({ repsSorted, active, apiKey, systemP
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1000,
       system: systemPrompt || DEFAULT_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: userMsg }],

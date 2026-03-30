@@ -800,6 +800,7 @@ export default function Inspector() {
         } catch (err) {
           if (err.name === 'AbortError') break
           storeRepError(owner, err.message)
+          setRunError(err.message)
         }
       }
 
