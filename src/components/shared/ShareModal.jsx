@@ -4,23 +4,23 @@ import { useForecastStore } from '../../store/forecastStore'
 // Fields encoded into the share URL
 const SHARE_FIELDS = [
   'managerName', 'managerTeam', 'quarterLabel',
-  'quota', 'closed', 'probIncludesUpside',
-  'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
-  'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',
+  'quota', 'closed', 'callIncludesBestCase',
+  'r_worst_case', 'r_call', 'r_best_case', 'r_pipe', 'r_cnc',
+  'pipe_worst_case', 'pipe_call', 'pipe_best_case', 'pipe_pipe',
   'cnc_opps', 'cnc_asp',
-  'm1_closed', 'm1_commit', 'm1_prob', 'm1_up',
-  'm2_closed', 'm2_commit', 'm2_prob', 'm2_up',
-  'm3_closed', 'm3_commit', 'm3_prob', 'm3_up',
+  'm1_closed', 'm1_worst_case', 'm1_call', 'm1_best_case',
+  'm2_closed', 'm2_worst_case', 'm2_call', 'm2_best_case',
+  'm3_closed', 'm3_worst_case', 'm3_call', 'm3_best_case',
 ]
 
 const NUMERIC_FIELDS = new Set([
   'quota', 'closed',
-  'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
-  'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',
+  'r_worst_case', 'r_call', 'r_best_case', 'r_pipe', 'r_cnc',
+  'pipe_worst_case', 'pipe_call', 'pipe_best_case', 'pipe_pipe',
   'cnc_opps', 'cnc_asp',
-  'm1_closed', 'm1_commit', 'm1_prob', 'm1_up',
-  'm2_closed', 'm2_commit', 'm2_prob', 'm2_up',
-  'm3_closed', 'm3_commit', 'm3_prob', 'm3_up',
+  'm1_closed', 'm1_worst_case', 'm1_call', 'm1_best_case',
+  'm2_closed', 'm2_worst_case', 'm2_call', 'm2_best_case',
+  'm3_closed', 'm3_worst_case', 'm3_call', 'm3_best_case',
 ])
 
 export function buildShareUrl(state) {
@@ -43,7 +43,7 @@ export function parseShareUrl() {
       const v = params.get(k)
       if (NUMERIC_FIELDS.has(k)) {
         state[k] = parseFloat(v) || 0
-      } else if (k === 'probIncludesUpside') {
+      } else if (k === 'callIncludesBestCase') {
         state[k] = v === 'true'
       } else {
         state[k] = v

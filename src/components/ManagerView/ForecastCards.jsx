@@ -3,40 +3,40 @@ import { useForecastStore } from '../../store/forecastStore'
 import { fmt, attPct, attVar, cl } from '../../lib/fmt'
 
 const CARDS_META = [
-  { id: 'commit',  label: 'Commit forecast',   color: '#1a56db', dot: '#1a56db' },
-  { id: 'prob',    label: 'Probable forecast',  color: '#0d7c3d', dot: '#0d7c3d' },
-  { id: 'up',      label: 'Upside forecast',    color: '#b45309', dot: '#b45309' },
+  { id: 'worst_case', label: 'Worst Case forecast', color: '#1a56db', dot: '#1a56db' },
+  { id: 'call',       label: 'Call forecast',        color: '#0d7c3d', dot: '#0d7c3d' },
+  { id: 'best_case',  label: 'Best Case forecast',   color: '#b45309', dot: '#b45309' },
 ]
 
 const CAT_SEG_COLORS = {
-  closed: '#1a56db', commit: '#93c5fd',
-  probable: '#6ee7b7', cnc: '#34d399', upside: '#fcd34d',
+  closed:     '#1a56db', worst_case: '#93c5fd',
+  call:       '#6ee7b7', cnc: '#34d399', best_case: '#fcd34d',
 }
 
-function QuotaBar({ quota, closed, bk_c, bk_p, cnc_prorated, bk_u, fc_up }) {
+function QuotaBar({ quota, closed, bk_wc, bk_call, cnc_prorated, bk_bc, fc_best_case }) {
   if (!quota) return null
   const cap = (v, rem) => Math.max(0, Math.min(rem, (v / quota) * 100))
-  const wC   = cap(closed,        100)
-  const wCnc = cap(cnc_prorated,  100 - wC)
-  const wBkC = cap(bk_c,          100 - wC - wCnc)
-  const wBkP = cap(bk_p,          100 - wC - wCnc - wBkC)
-  const wBkU = cap(bk_u,          100 - wC - wCnc - wBkC - wBkP)
-  const pct  = attPct(fc_up, quota)
-  const col  = attVar(fc_up, quota)
+  const wC      = cap(closed,        100)
+  const wCnc    = cap(cnc_prorated,  100 - wC)
+  const wBkWc   = cap(bk_wc,         100 - wC - wCnc)
+  const wBkCall = cap(bk_call,        100 - wC - wCnc - wBkWc)
+  const wBkBc   = cap(bk_bc,          100 - wC - wCnc - wBkWc - wBkCall)
+  const pct  = attPct(fc_best_case, quota)
+  const col  = attVar(fc_best_case, quota)
 
   const segs = [
-    { w: wC,   bg: CAT_SEG_COLORS.closed },
-    { w: wCnc, bg: CAT_SEG_COLORS.cnc },
-    { w: wBkC, bg: CAT_SEG_COLORS.commit },
-    { w: wBkP, bg: CAT_SEG_COLORS.probable },
-    { w: wBkU, bg: CAT_SEG_COLORS.upside },
+    { w: wC,      bg: CAT_SEG_COLORS.closed },
+    { w: wCnc,    bg: CAT_SEG_COLORS.cnc },
+    { w: wBkWc,   bg: CAT_SEG_COLORS.worst_case },
+    { w: wBkCall, bg: CAT_SEG_COLORS.call },
+    { w: wBkBc,   bg: CAT_SEG_COLORS.best_case },
   ]
   const legends = [
-    { label: 'Closed',   bg: CAT_SEG_COLORS.closed },
-    { label: 'C&C',      bg: CAT_SEG_COLORS.cnc },
-    { label: 'Commit',   bg: CAT_SEG_COLORS.commit },
-    { label: 'Probable', bg: CAT_SEG_COLORS.probable },
-    { label: 'Upside',   bg: CAT_SEG_COLORS.upside },
+    { label: 'Closed',     bg: CAT_SEG_COLORS.closed },
+    { label: 'C&C',        bg: CAT_SEG_COLORS.cnc },
+    { label: 'Worst Case', bg: CAT_SEG_COLORS.worst_case },
+    { label: 'Call',       bg: CAT_SEG_COLORS.call },
+    { label: 'Best Case',  bg: CAT_SEG_COLORS.best_case },
   ]
 
   return (
@@ -127,7 +127,7 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
           />
         </div>
 
-        {/* Toggle pill (probable card only) */}
+        {/* Toggle pill (call card only) */}
         {toggleEl}
 
         {/* Breakdown rows */}
@@ -137,8 +137,8 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
               key={i}
               className={`flex justify-between text-[12px] ${r.cnc ? 'border-t border-[var(--bdr2)] pt-1 mt-0.5' : ''}`}
             >
-              <span className={r.upside ? 'text-[#b45309]' : 'text-[var(--tx2)]'}>{r.l}</span>
-              <span className={`font-[600] ${r.upside ? 'text-[#b45309]' : 'text-[var(--tx)]'}`}>{r.v}</span>
+              <span className={r.best_case ? 'text-[#b45309]' : 'text-[var(--tx2)]'}>{r.l}</span>
+              <span className={`font-[600] ${r.best_case ? 'text-[#b45309]' : 'text-[var(--tx)]'}`}>{r.v}</span>
             </div>
           ))}
         </div>
@@ -168,7 +168,7 @@ export default function ForecastCards() {
   const s = useForecastStore()
   const d = s.derived || {}
   const { quota, closed } = s
-  const { bk_c, bk_p, bk_u, cnc_rev, cnc_prorated, fc_commit, fc_prob, fc_up, bk_u_in_prob } = d
+  const { bk_wc, bk_call, bk_bc, cnc_rev, cnc_prorated, fc_worst_case, fc_call, fc_best_case, bk_bc_in_call } = d
   const [expanded, setExpanded] = useState({})
 
   const toggleCard = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
@@ -203,14 +203,14 @@ export default function ForecastCards() {
     }
   }
 
-  // Probable toggle pill
-  const ProbToggle = () => (
+  // Call toggle pill
+  const CallToggle = () => (
     <button
-      onClick={e => { e.stopPropagation(); s.toggleProbUpside() }}
+      onClick={e => { e.stopPropagation(); s.toggleCallIncludesBestCase() }}
       className={`
         inline-flex items-center gap-1.5 text-[10px] font-[600] px-2 py-1 rounded-full
         border cursor-pointer transition-all duration-150 mt-1 mb-1
-        ${s.probIncludesUpside
+        ${s.callIncludesBestCase
           ? 'bg-[#fff7ed] border-[#fed7aa] text-[#b45309]'
           : 'bg-[var(--bg)] border-[var(--bdr2)] text-[var(--tx2)] hover:border-[#d1d5db] hover:text-[var(--tx)]'
         }
@@ -218,56 +218,56 @@ export default function ForecastCards() {
     >
       <span
         className="w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors duration-150"
-        style={{ background: s.probIncludesUpside ? '#b45309' : '#d1d5db' }}
+        style={{ background: s.callIncludesBestCase ? '#b45309' : '#d1d5db' }}
       />
-      {s.probIncludesUpside ? '½ Upside included' : '+ ½ Upside?'}
+      {s.callIncludesBestCase ? '½ Best Case included' : '+ ½ Best Case?'}
     </button>
   )
 
   const cards = [
     {
       meta: CARDS_META[0],
-      fc: fc_commit || 0,
+      fc: fc_worst_case || 0,
       rows: [
-        { l: 'Closed QTD',         v: fmt(closed) },
-        { l: '+ Commit bookings',   v: fmt(bk_c) },
-        { l: '+ C&C (prorated)',    v: fmt(cnc_prorated), cnc: true },
+        { l: 'Closed QTD',            v: fmt(closed) },
+        { l: '+ Worst Case bookings', v: fmt(bk_wc) },
+        { l: '+ C&C (prorated)',       v: fmt(cnc_prorated), cnc: true },
       ],
       detailRows: [
-        { l: 'Conversion rate',       v: `${s.r_commit}%` },
-        { l: 'Open commit pipeline',  v: fmt(s.pipe_commit) },
-        { l: 'Expected bookings',     v: fmt(bk_c) },
-        { l: 'C&C prorated',          v: fmt(cnc_prorated) },
+        { l: 'Conversion rate',            v: `${s.r_worst_case}%` },
+        { l: 'Open worst case pipeline',   v: fmt(s.pipe_worst_case) },
+        { l: 'Expected bookings',          v: fmt(bk_wc) },
+        { l: 'C&C prorated',               v: fmt(cnc_prorated) },
       ],
     },
     {
       meta: CARDS_META[1],
-      fc: fc_prob || 0,
+      fc: fc_call || 0,
       rows: [
-        { l: 'Commit FC',             v: fmt(fc_commit) },
-        { l: '+ Probable bookings',   v: fmt(bk_p) },
-        ...(bk_u_in_prob > 0 ? [{ l: '+ ½ Upside bookings', v: fmt(bk_u_in_prob), upside: true }] : []),
+        { l: 'Worst Case FC',          v: fmt(fc_worst_case) },
+        { l: '+ Call bookings',        v: fmt(bk_call) },
+        ...(bk_bc_in_call > 0 ? [{ l: '+ ½ Best Case bookings', v: fmt(bk_bc_in_call), best_case: true }] : []),
       ],
       detailRows: [
-        { l: 'Conversion rate',        v: `${s.r_prob}%` },
-        { l: 'Open probable pipeline', v: fmt(s.pipe_prob) },
-        { l: 'Expected bookings',      v: fmt(bk_p) },
-        ...(bk_u_in_prob > 0 ? [{ l: '+ ½ Upside bookings', v: fmt(bk_u_in_prob) }] : []),
+        { l: 'Conversion rate',        v: `${s.r_call}%` },
+        { l: 'Open call pipeline',     v: fmt(s.pipe_call) },
+        { l: 'Expected bookings',      v: fmt(bk_call) },
+        ...(bk_bc_in_call > 0 ? [{ l: '+ ½ Best Case bookings', v: fmt(bk_bc_in_call) }] : []),
       ],
-      toggleEl: <ProbToggle />,
+      toggleEl: <CallToggle />,
     },
     {
       meta: CARDS_META[2],
-      fc: fc_up || 0,
+      fc: fc_best_case || 0,
       rows: [
-        { l: 'Probable FC',           v: fmt(fc_prob) },
-        { l: bk_u_in_prob > 0 ? '+ remaining ½ Upside' : '+ Upside bookings', v: fmt((bk_u || 0) - (bk_u_in_prob || 0)) },
+        { l: 'Call FC',                                                                           v: fmt(fc_call) },
+        { l: bk_bc_in_call > 0 ? '+ remaining ½ Best Case' : '+ Best Case bookings',            v: fmt((bk_bc || 0) - (bk_bc_in_call || 0)) },
       ],
       detailRows: [
-        { l: 'Conversion rate',       v: `${s.r_up}%` },
-        { l: 'Open upside pipeline',  v: fmt(s.pipe_up) },
-        { l: 'Expected bookings',     v: fmt(bk_u) },
-        ...(bk_u_in_prob > 0 ? [{ l: '(½ already in Probable)', v: '' }] : []),
+        { l: 'Conversion rate',          v: `${s.r_best_case}%` },
+        { l: 'Open best case pipeline',  v: fmt(s.pipe_best_case) },
+        { l: 'Expected bookings',        v: fmt(bk_bc) },
+        ...(bk_bc_in_call > 0 ? [{ l: '(½ already in Call)', v: '' }] : []),
       ],
     },
   ]
@@ -315,11 +315,11 @@ export default function ForecastCards() {
       <QuotaBar
         quota={quota}
         closed={closed}
-        bk_c={bk_c || 0}
-        bk_p={bk_p || 0}
+        bk_wc={bk_wc || 0}
+        bk_call={bk_call || 0}
         cnc_prorated={cnc_prorated || 0}
-        bk_u={bk_u || 0}
-        fc_up={fc_up || 0}
+        bk_bc={bk_bc || 0}
+        fc_best_case={fc_best_case || 0}
       />
     </div>
   )

@@ -67,9 +67,9 @@ function Cell({ value, locked, onChange }) {
 
 const ROWS = [
   { label: 'Closed',   sub: 'closed', color: 'var(--green)' },
-  { label: 'Commit',   sub: 'commit', color: 'var(--blue)'  },
-  { label: 'Probable', sub: 'prob',   color: 'var(--green)' },
-  { label: 'Upside',   sub: 'up',     color: 'var(--amber)' },
+  { label: 'Worst Case', sub: 'worst_case', color: 'var(--blue)'  },
+  { label: 'Call',       sub: 'call',       color: 'var(--green)' },
+  { label: 'Best Case',  sub: 'best_case',  color: 'var(--amber)' },
 ]
 
 const COL = '120px repeat(3, 1fr) 100px'

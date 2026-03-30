@@ -16,19 +16,19 @@ const STEPS = [
   },
   {
     title: 'Review conversion rates',
-    description: 'Check that your Commit, Probable, Upside, and C&C rates reflect your team\'s historical close rates this quarter.',
+    description: 'Check that your Worst Case, Call, Best Case, and C&C rates reflect your team\'s historical close rates this quarter.',
     chip: '→ Manager Walk-Up',
     view: 'manager',
   },
   {
     title: 'Set your Create & Close inputs',
-    description: 'Enter qualified opps to create, average deal size, and win rate. C&C bookings are prorated by selling weeks remaining and included in your Commit forecast.',
+    description: 'Enter qualified opps to create, average deal size, and win rate. C&C bookings are prorated by selling weeks remaining and included in your Worst Case forecast.',
     chip: '→ Manager Walk-Up',
     view: 'manager',
   },
   {
     title: 'Read your forecast',
-    description: "Review Commit, Probable, and Upside forecasts. Toggle '+ ½ Upside' on the Probable card if you want to include half your upside bookings in your Probable forecast.",
+    description: "Review Worst Case, Call, and Best Case forecasts. Toggle '+ ½ Best Case' on the Call card if you want to include half your best case bookings in your Call forecast.",
     chip: '→ Manager Walk-Up',
     view: 'manager',
   },
@@ -52,7 +52,7 @@ const STEPS = [
   },
   {
     title: 'Moneyballer your forecast',
-    description: 'At month or quarter end, go to Deal-Backing. Drag deals into Deal-Backed Commit, Probable, and Upside to build a bottoms-up path to your number. The C&C card is always available at the top of each column.',
+    description: 'At month or quarter end, go to Deal-Backing. Drag deals into Deal-Backed Worst Case, Call, and Best Case to build a bottoms-up path to your number. The C&C card is always available at the top of each column.',
     chip: '→ Deal-Backing',
     view: 'dealback',
   },

@@ -6,9 +6,9 @@ import { fetchAISummary, fetchManagerInsights, findDealAction, parseAIFlags, DEF
 import { formatSlackMessage } from '../../lib/slackFormatter'
 import { fmt } from '../../lib/fmt'
 
-const CAT_ORDER  = ['commit', 'probable', 'upside', 'pipeline']
-const CAT_LABEL  = { commit: 'Commit', probable: 'Probable', upside: 'Upside', pipeline: 'Pipeline' }
-const CAT_ACCENT = { commit: '#1a56db', probable: '#0d7c3d', upside: '#b45309', pipeline: '#6b7280' }
+const CAT_ORDER  = ['worst_case', 'call', 'best_case', 'pipeline']
+const CAT_LABEL  = { worst_case: 'Worst Case', call: 'Call', best_case: 'Best Case', pipeline: 'Pipeline' }
+const CAT_ACCENT = { worst_case: '#1a56db', call: '#0d7c3d', best_case: '#b45309', pipeline: '#6b7280' }
 
 // ── Grouping helpers ──────────────────────────────────────────
 
@@ -256,7 +256,7 @@ function RepScorecard({ owner, deals, repResult }) {
   const critCount = deals.flatMap(d => d._flags || []).filter(f => f.sev === 'critical').length
   const cleanCount = deals.filter(d => (d._flags || []).length === 0).length
   const hygiene   = deals.length > 0 ? Math.round((cleanCount / deals.length) * 100) : 100
-  const cats      = { commit: 0, probable: 0, upside: 0, pipeline: 0 }
+  const cats      = { worst_case: 0, call: 0, best_case: 0, pipeline: 0 }
   deals.forEach(d => { if (cats[d.f_fc_cat_norm] !== undefined) cats[d.f_fc_cat_norm]++ })
 
   return (
@@ -267,10 +267,10 @@ function RepScorecard({ owner, deals, repResult }) {
           <span className="text-[var(--tx2)]">{fmt(pipe)}</span>
           <span className="text-[var(--tx2)]">{deals.length} deal{deals.length !== 1 ? 's' : ''}</span>
           <div className="flex items-center gap-1.5">
-            {cats.commit   > 0 && <span className="text-[10px] font-[700] text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">{cats.commit}C</span>}
-            {cats.probable > 0 && <span className="text-[10px] font-[700] text-green-700 bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 rounded">{cats.probable}P</span>}
-            {cats.upside   > 0 && <span className="text-[10px] font-[700] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">{cats.upside}U</span>}
-            {cats.pipeline > 0 && <span className="text-[10px] font-[700] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">{cats.pipeline}Pp</span>}
+            {cats.worst_case > 0 && <span className="text-[10px] font-[700] text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">{cats.worst_case}WC</span>}
+            {cats.call       > 0 && <span className="text-[10px] font-[700] text-green-700 bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 rounded">{cats.call}C</span>}
+            {cats.best_case  > 0 && <span className="text-[10px] font-[700] text-amber-700 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">{cats.best_case}BC</span>}
+            {cats.pipeline   > 0 && <span className="text-[10px] font-[700] text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">{cats.pipeline}Pp</span>}
           </div>
           {critCount > 0
             ? <span className="text-red-600 font-[700]">🔴 {critCount} critical</span>

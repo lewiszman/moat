@@ -22,12 +22,14 @@ const DEFAULT_COL_MAP = {
 
 const DEFAULT_CAT_MAP = {
   'Closed Won':  'closed',
-  'Commit':      'commit',
-  'Commit ':     'commit',
-  'Best Case':   'probable',
-  'Probable':    'probable',
+  'Worst Case':  'worst_case',
+  'Commit':      'worst_case',   // legacy SFDC
+  'Commit ':     'worst_case',   // legacy SFDC with trailing space
+  'Call':        'call',
+  'Probable':    'call',         // legacy SFDC
+  'Best Case':   'best_case',
+  'Upside':      'best_case',    // legacy SFDC
   'Pipeline':    'pipeline',
-  'Upside':      'upside',
   'Omitted':     'omitted',
 }
 
@@ -37,10 +39,13 @@ export function normalizeFcCat(raw, catMap = DEFAULT_CAT_MAP) {
   if (catMap[trimmed]) return catMap[trimmed]
   const lower = trimmed.toLowerCase()
   if (lower.includes('closed') || lower.includes('won')) return 'closed'
-  if (lower.includes('commit')) return 'commit'
-  if (lower.includes('probable') || lower.includes('best')) return 'probable'
-  if (lower.includes('upside')) return 'upside'
-  if (lower.includes('omit')) return 'omitted'
+  if (lower.includes('worst'))    return 'worst_case'
+  if (lower.includes('commit'))   return 'worst_case'   // legacy
+  if (lower.includes('best'))     return 'best_case'
+  if (lower.includes('call'))     return 'call'
+  if (lower.includes('probable')) return 'call'         // legacy
+  if (lower.includes('upside'))   return 'best_case'    // legacy
+  if (lower.includes('omit'))     return 'omitted'
   return 'pipeline'
 }
 
@@ -80,10 +85,10 @@ export function aggregateForecast(records) {
 
   return {
     closed,
-    pipe_commit:  byCategory('commit'),
-    pipe_prob:    byCategory('probable'),
-    pipe_up:      byCategory('upside'),
-    pipe_pipe:    byCategory('pipeline'),
+    pipe_worst_case: byCategory('worst_case'),
+    pipe_call:       byCategory('call'),
+    pipe_best_case:  byCategory('best_case'),
+    pipe_pipe:       byCategory('pipeline'),
   }
 }
 

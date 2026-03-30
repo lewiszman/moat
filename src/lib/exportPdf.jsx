@@ -87,23 +87,23 @@ const today = () => new Date().toLocaleDateString('en-US', { month: 'long', day:
 
 function forecastPages(s, d, qInfo, comments, todayStr) {
   const cards = [
-    { label: 'Commit',   value: d.fc_commit || 0, color: BLUE },
-    { label: 'Probable', value: d.fc_prob   || 0, color: GREEN },
-    { label: 'Upside',   value: d.fc_up     || 0, color: AMBER },
+    { label: 'Worst Case', value: d.fc_worst_case || 0, color: BLUE },
+    { label: 'Call',       value: d.fc_call       || 0, color: GREEN },
+    { label: 'Best Case',  value: d.fc_best_case  || 0, color: AMBER },
   ]
 
   const pipeRows = [
-    { label: 'Commit',   pipe: s.pipe_commit, rate: s.r_commit,  exp: d.bk_c,  color: BLUE },
-    { label: 'Probable', pipe: s.pipe_prob,   rate: s.r_prob,    exp: d.bk_p,  color: GREEN },
-    { label: 'Upside',   pipe: s.pipe_up,     rate: s.r_up,      exp: d.bk_u,  color: AMBER },
-    { label: 'Pipeline', pipe: s.pipe_pipe,   rate: s.r_pipe,    exp: d.bk_pp, color: GRAY },
+    { label: 'Worst Case', pipe: s.pipe_worst_case, rate: s.r_worst_case, exp: d.bk_wc,   color: BLUE },
+    { label: 'Call',       pipe: s.pipe_call,       rate: s.r_call,       exp: d.bk_call, color: GREEN },
+    { label: 'Best Case',  pipe: s.pipe_best_case,  rate: s.r_best_case,  exp: d.bk_bc,   color: AMBER },
+    { label: 'Pipeline',   pipe: s.pipe_pipe,       rate: s.r_pipe,       exp: d.bk_pp,   color: GRAY },
   ]
 
   const monthRows = [
-    { label: 'Closed',   keys: ['m1_closed','m2_closed','m3_closed'] },
-    { label: 'Commit',   keys: ['m1_commit','m2_commit','m3_commit'] },
-    { label: 'Probable', keys: ['m1_prob','m2_prob','m3_prob'] },
-    { label: 'Upside',   keys: ['m1_up','m2_up','m3_up'] },
+    { label: 'Closed',     keys: ['m1_closed','m2_closed','m3_closed'] },
+    { label: 'Worst Case', keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
+    { label: 'Call',       keys: ['m1_call','m2_call','m3_call'] },
+    { label: 'Best Case',  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
   ]
 
   const commentEntries = Object.entries(comments || {})

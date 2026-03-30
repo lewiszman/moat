@@ -1,8 +1,8 @@
 // ── Slack message formatter ────────────────────────────────────
 // Pure function — no side effects, no imports from React
 
-const CAT_ORDER = ['commit', 'probable', 'upside', 'pipeline']
-const CAT_LABEL = { commit: 'Commit', probable: 'Probable', upside: 'Upside', pipeline: 'Pipeline' }
+const CAT_ORDER = ['worst_case', 'call', 'best_case', 'pipeline']
+const CAT_LABEL = { worst_case: 'Worst Case', call: 'Call', best_case: 'Best Case', pipeline: 'Pipeline' }
 
 function fmtAmt(n) {
   if (!n || isNaN(n)) return '$0'

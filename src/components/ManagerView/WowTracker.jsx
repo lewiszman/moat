@@ -90,7 +90,7 @@ export default function WowTracker() {
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-[var(--bdr2)] bg-[var(--bg2)]">
-                  {['Week', 'Date', 'Commit FC', 'Probable FC', 'Upside FC', 'Pipeline', 'Closed QTD', ''].map((h, i) => (
+                  {['Week', 'Date', 'Worst Case FC', 'Call FC', 'Best Case FC', 'Pipeline', 'Closed QTD', ''].map((h, i) => (
                     <th key={i} className={`px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] ${i >= 2 && i <= 6 ? 'text-right' : 'text-left'}`}>
                       {h}
                     </th>
@@ -120,18 +120,18 @@ export default function WowTracker() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_commit)}</span>
-                          {(isW2 || isW10) && <AccuracyBadge fcCommit={snap.fc_commit} actual={actualClosed} />}
+                          <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_worst_case)}</span>
+                          {(isW2 || isW10) && <AccuracyBadge fcCommit={snap.fc_worst_case} actual={actualClosed} />}
                         </div>
-                        {prev && <DeltaBadge curr={snap.fc_commit} prev={prev.fc_commit} />}
+                        {prev && <DeltaBadge curr={snap.fc_worst_case} prev={prev.fc_worst_case} />}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_probable)}</span>
-                        {prev && <div><DeltaBadge curr={snap.fc_probable} prev={prev.fc_probable} /></div>}
+                        <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_call)}</span>
+                        {prev && <div><DeltaBadge curr={snap.fc_call} prev={prev.fc_call} /></div>}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_upside)}</span>
-                        {prev && <div><DeltaBadge curr={snap.fc_upside} prev={prev.fc_upside} /></div>}
+                        <span className="font-[600] text-[var(--tx)]">{fmt(snap.fc_best_case)}</span>
+                        {prev && <div><DeltaBadge curr={snap.fc_best_case} prev={prev.fc_best_case} /></div>}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <span className="font-[600] text-[var(--tx)]">{fmt(snap.pipeline)}</span>
@@ -170,7 +170,7 @@ export default function WowTracker() {
             {actualClosed != null && (
               <span className="text-[11px] text-[var(--tx2)]">
                 Saved: <strong className="text-[var(--tx)]">{fmt(actualClosed)}</strong>
-                {' '}— W2/W10 rows show forecast accuracy
+                {' '}— W2/W10 rows show Worst Case forecast accuracy
               </span>
             )}
           </div>

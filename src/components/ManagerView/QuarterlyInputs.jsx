@@ -70,10 +70,10 @@ export default function QuarterlyInputs() {
   const d = s.derived || {}
 
   const ROWS = [
-    { label: 'Commit',   pipeKey: 'pipe_commit', rateKey: 'r_commit', expId: 'bk_c',  pill: 'commit',   pillColor: '#1a56db' },
-    { label: 'Probable', pipeKey: 'pipe_prob',   rateKey: 'r_prob',   expId: 'bk_p',  pill: 'probable', pillColor: '#0d7c3d' },
-    { label: 'Upside',   pipeKey: 'pipe_up',     rateKey: 'r_up',     expId: 'bk_u',  pill: 'upside',   pillColor: '#b45309' },
-    { label: 'Pipeline', pipeKey: 'pipe_pipe',   rateKey: 'r_pipe',   expId: 'bk_pp', pill: 'pipeline', pillColor: '#6b7280' },
+    { label: 'Worst Case', pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expId: 'bk_wc',   pill: 'worst case', pillColor: '#1a56db' },
+    { label: 'Call',       pipeKey: 'pipe_call',       rateKey: 'r_call',       expId: 'bk_call', pill: 'call',       pillColor: '#0d7c3d' },
+    { label: 'Best Case',  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expId: 'bk_bc',   pill: 'best case',  pillColor: '#b45309' },
+    { label: 'Pipeline',   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expId: 'bk_pp',   pill: 'pipeline',   pillColor: '#6b7280' },
   ]
 
   return (
@@ -105,11 +105,11 @@ export default function QuarterlyInputs() {
         <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 px-4 py-2.5 bg-[var(--bg2)] border-t border-[var(--bdr2)]">
           <span className="text-[12px] font-[700] text-[var(--tx)]">Total</span>
           <span className="text-[13px] font-[700] w-28 text-[var(--tx)]">
-            {fmt((s.pipe_commit||0)+(s.pipe_prob||0)+(s.pipe_up||0)+(s.pipe_pipe||0))}
+            {fmt((s.pipe_worst_case||0)+(s.pipe_call||0)+(s.pipe_best_case||0)+(s.pipe_pipe||0))}
           </span>
           <span className="w-36" />
           <span className="text-[13px] font-[700] w-24 text-right text-[var(--tx)]">
-            {fmt((d.bk_c||0)+(d.bk_p||0)+(d.bk_u||0)+(d.bk_pp||0))}
+            {fmt((d.bk_wc||0)+(d.bk_call||0)+(d.bk_bc||0)+(d.bk_pp||0))}
           </span>
         </div>
       </div>

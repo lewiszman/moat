@@ -2,8 +2,8 @@ import React, { useState } from 'react'
 
 const CATEGORIES = [
   {
-    key: 'commit',
-    label: 'Commit',
+    key: 'worst_case',
+    label: 'Worst Case',
     color: '#1a56db',
     bg: '#eff6ff',
     description: 'Deals you are committing to close this quarter. High confidence. You own the outcome.',
@@ -15,11 +15,11 @@ const CATEGORIES = [
     ],
   },
   {
-    key: 'probable',
-    label: 'Probable',
+    key: 'call',
+    label: 'Call',
     color: '#0d7c3d',
     bg: '#f0fdf4',
-    description: 'Strong deals with a realistic path to closing this quarter. Not yet commit-ready but progressing.',
+    description: 'Strong deals with a realistic path to closing this quarter. Not yet worst-case-ready but progressing.',
     criteria: [
       'Business case presented and validated',
       'Decision criteria and process understood',
@@ -28,8 +28,8 @@ const CATEGORIES = [
     ],
   },
   {
-    key: 'upside',
-    label: 'Upside',
+    key: 'best_case',
+    label: 'Best Case',
     color: '#b45309',
     bg: '#fffbeb',
     description: 'Deals that could close this quarter if things go well. Treat as stretch. Do not depend on them.',
@@ -69,14 +69,14 @@ const CATEGORIES = [
 ]
 
 // Arithmetic mirrors forecastStore.js calcForecast():
-//   fc_commit = closed + bk_c + cnc_prorated
-//   fc_prob   = fc_commit + bk_p + bk_u_in_prob   (no C&C — it's in Commit)
-//   fc_up     = fc_prob + (bk_u − bk_u_in_prob)
+//   fc_worst_case = closed + bk_wc + cnc_prorated
+//   fc_call       = fc_worst_case + bk_call + bk_bc_in_call   (no C&C — it's in Worst Case)
+//   fc_best_case  = fc_call + (bk_bc − bk_bc_in_call)
 const ARITHMETIC = [
-  { label: 'Commit FC',   formula: 'Closed + Commit bookings + C&C (prorated)',       color: '#1a56db' },
-  { label: 'Probable FC', formula: 'Commit FC + Probable bookings (+ ½ Upside if on)', color: '#0d7c3d' },
-  { label: 'Upside FC',   formula: 'Probable FC + Upside bookings (− ½ if folded in)', color: '#b45309' },
-  { label: 'Full FC',     formula: 'Upside FC + Pipeline bookings',                   color: '#6b7280' },
+  { label: 'Worst Case FC', formula: 'Closed + Worst Case bookings + C&C (prorated)',          color: '#1a56db' },
+  { label: 'Call FC',       formula: 'Worst Case FC + Call bookings (+ ½ Best Case if on)',    color: '#0d7c3d' },
+  { label: 'Best Case FC',  formula: 'Call FC + Best Case bookings (− ½ if folded in)',        color: '#b45309' },
+  { label: 'Full FC',       formula: 'Best Case FC + Pipeline bookings',                        color: '#6b7280' },
 ]
 
 function CategoryCard({ cat }) {
@@ -153,8 +153,8 @@ function RollupDiagram() {
       </div>
       <div className="px-4 pb-4">
         <div className="rounded-lg p-3 text-[11px] text-[var(--tx2)] leading-relaxed" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-          <strong className="text-[#0d7c3d]">Upside toggle:</strong> When enabled, 50% of Upside bookings fold into Probable FC.
-          Upside FC always reflects 100% of Upside pipeline regardless.
+          <strong className="text-[#0d7c3d]">Best Case toggle:</strong> When enabled, 50% of Best Case bookings fold into Call FC.
+          Best Case FC always reflects 100% of Best Case pipeline regardless.
         </div>
       </div>
     </div>
@@ -194,11 +194,11 @@ export default function RepView() {
       <div className="card p-4">
         <ul className="flex flex-col gap-3">
           {[
-            ["Be conservative with Commit", "If you're not sure, it's Probable. Broken commits damage manager credibility upward."],
+            ["Be conservative with Worst Case", "If you're not sure, it's Call. Broken worst-case calls damage manager credibility upward."],
             ["Update close dates weekly", "A past close date is an automatic red flag in the Inspector. Keep dates real."],
-            ["Fill MEDDPICC fields", "Thin fields in Commit/Probable deals trigger warnings. Specificity builds trust."],
+            ["Fill MEDDPICC fields", "Thin fields in Worst Case/Call deals trigger warnings. Specificity builds trust."],
             ["Own your next step", "Next steps should be AE-owned, future-dated actions — not 'waiting on prospect.'"],
-            ["Be honest about Upside", "Upside means it could close if things go perfectly. It's not a parking lot for slipped deals."],
+            ["Be honest about Best Case", "Best Case means it could close if things go perfectly. It's not a parking lot for slipped deals."],
           ].map(([title, desc]) => (
             <li key={title} className="flex items-start gap-3 text-[12px]">
               <span className="text-[var(--blue)] font-[700] flex-shrink-0 mt-0.5">→</span>

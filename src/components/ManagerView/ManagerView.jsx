@@ -169,11 +169,11 @@ export default function ManagerView() {
       </div>
       <div className="card p-4">
         {[
-          { label: 'Commit',         key: 'r_commit', color: '#1a56db', min: 50, max: 100 },
-          { label: 'Probable',       key: 'r_prob',   color: '#0d7c3d', min: 30, max: 95  },
-          { label: 'Upside',         key: 'r_up',     color: '#b45309', min: 10, max: 80  },
-          { label: 'Pipeline',       key: 'r_pipe',   color: '#6b7280', min: 5,  max: 50  },
-          { label: 'Create & close', key: 'r_cnc',    color: '#6b7280', min: 5,  max: 50  },
+          { label: 'Worst Case',     key: 'r_worst_case', color: '#1a56db', min: 50, max: 100 },
+          { label: 'Call',           key: 'r_call',       color: '#0d7c3d', min: 30, max: 95  },
+          { label: 'Best Case',      key: 'r_best_case',  color: '#b45309', min: 10, max: 80  },
+          { label: 'Pipeline',       key: 'r_pipe',       color: '#6b7280', min: 5,  max: 50  },
+          { label: 'Create & close', key: 'r_cnc',        color: '#6b7280', min: 5,  max: 50  },
         ].map(row => (
           <div key={row.key} className="flex items-center gap-4 py-2 border-b border-[var(--bdr2)] last:border-0">
             <span className="text-[13px] text-[var(--tx)] w-32 flex-shrink-0">{row.label}</span>

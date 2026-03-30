@@ -11,32 +11,63 @@ import { getFiscalQuarterInfo, sellDaysRemaining } from '../lib/fmt'
 const SNAPSHOT_KEYS = [
   'managerName', 'managerTeam', 'quarterLabel', 'monthUnlocked', 'sfdcUrl',
   'quota', 'closed',
-  'r_commit', 'r_prob', 'r_up', 'r_pipe', 'r_cnc',
-  'pipe_commit', 'pipe_prob', 'pipe_up', 'pipe_pipe',
-  'cnc_opps', 'cnc_asp', 'probIncludesUpside', 'activeView',
+  'r_worst_case', 'r_call', 'r_best_case', 'r_pipe', 'r_cnc',
+  'pipe_worst_case', 'pipe_call', 'pipe_best_case', 'pipe_pipe',
+  'cnc_opps', 'cnc_asp', 'callIncludesBestCase', 'activeView',
   'forecastDefaults', 'fyStartMonth',
-  'm1_closed', 'm1_commit', 'm1_prob', 'm1_up',
-  'm2_closed', 'm2_commit', 'm2_prob', 'm2_up',
-  'm3_closed', 'm3_commit', 'm3_prob', 'm3_up',
+  'm1_closed', 'm1_worst_case', 'm1_call', 'm1_best_case',
+  'm2_closed', 'm2_worst_case', 'm2_call', 'm2_best_case',
+  'm3_closed', 'm3_worst_case', 'm3_call', 'm3_best_case',
 ]
 
+// ── Supabase snapshot migration ────────────────────────────────
+// Handles sessions saved before the Worst Case / Call / Best Case rename.
+export function migrateSnapshot(snapshot) {
+  const map = {
+    pipe_commit:        'pipe_worst_case',
+    pipe_prob:          'pipe_call',
+    pipe_up:            'pipe_best_case',
+    r_commit:           'r_worst_case',
+    r_prob:             'r_call',
+    r_up:               'r_best_case',
+    bk_c:               'bk_wc',
+    bk_p:               'bk_call',
+    bk_u:               'bk_bc',
+    fc_commit:          'fc_worst_case',
+    fc_prob:            'fc_call',
+    fc_up:              'fc_best_case',
+    probIncludesUpside: 'callIncludesBestCase',
+    m1_commit: 'm1_worst_case', m1_prob: 'm1_call', m1_up: 'm1_best_case',
+    m2_commit: 'm2_worst_case', m2_prob: 'm2_call', m2_up: 'm2_best_case',
+    m3_commit: 'm3_worst_case', m3_prob: 'm3_call', m3_up: 'm3_best_case',
+  }
+  const migrated = { ...snapshot }
+  Object.entries(map).forEach(([old, next]) => {
+    if (old in migrated) {
+      migrated[next] = migrated[old]
+      delete migrated[old]
+    }
+  })
+  return migrated
+}
+
 // ── Default values ─────────────────────────────────────────────
-const DEFAULT_RATES    = { r_commit: 80, r_prob: 75, r_up: 50, r_pipe: 18, r_cnc: 18 }
-const DEFAULT_PIPELINE = { pipe_commit: 0, pipe_prob: 0, pipe_up: 0, pipe_pipe: 0 }
+const DEFAULT_RATES    = { r_worst_case: 80, r_call: 75, r_best_case: 50, r_pipe: 18, r_cnc: 18 }
+const DEFAULT_PIPELINE = { pipe_worst_case: 0, pipe_call: 0, pipe_best_case: 0, pipe_pipe: 0 }
 const DEFAULT_CNC      = { cnc_opps: 5, cnc_asp: 14000 }
 const DEFAULT_MONTHLY  = {
-  m1_closed: 0, m1_commit: 0, m1_prob: 0, m1_up: 0,
-  m2_closed: 0, m2_commit: 0, m2_prob: 0, m2_up: 0,
-  m3_closed: 0, m3_commit: 0, m3_prob: 0, m3_up: 0,
+  m1_closed: 0, m1_worst_case: 0, m1_call: 0, m1_best_case: 0,
+  m2_closed: 0, m2_worst_case: 0, m2_call: 0, m2_best_case: 0,
+  m3_closed: 0, m3_worst_case: 0, m3_call: 0, m3_best_case: 0,
 }
 
 // ── Derived calculator (quarter-aware) ─────────────────────────
 function makeComputeDerived(isNextQuarter) {
   return function computeDerived(s) {
-    const bk_c     = s.pipe_commit * (s.r_commit / 100)
-    const bk_p     = s.pipe_prob   * (s.r_prob   / 100)
-    const bk_u     = s.pipe_up     * (s.r_up     / 100)
-    const bk_pp    = s.pipe_pipe   * (s.r_pipe   / 100)
+    const bk_wc   = s.pipe_worst_case * (s.r_worst_case / 100)
+    const bk_call = s.pipe_call       * (s.r_call       / 100)
+    const bk_bc   = s.pipe_best_case  * (s.r_best_case  / 100)
+    const bk_pp   = s.pipe_pipe       * (s.r_pipe       / 100)
     const cnc_pipe = s.cnc_opps * s.cnc_asp
     const cnc_rev  = cnc_pipe   * (s.r_cnc    / 100)
 
@@ -50,11 +81,11 @@ function makeComputeDerived(isNextQuarter) {
       : Math.max(0, Math.ceil(sellDaysRemaining(new Date(), qInfo.qEndDate) / 5))
     const cnc_prorated = cnc_rev * (weeks_total > 0 ? weeks_remaining / weeks_total : 0)
 
-    const { fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob } = calcForecast({
-      closed: s.closed, bk_c, bk_p, bk_u, bk_pp, cnc_prorated,
-      probIncludesUpside: s.probIncludesUpside,
+    const { fc_worst_case, fc_call, fc_best_case, fc_full, bk_bc_in_call } = calcForecast({
+      closed: s.closed, bk_wc, bk_call, bk_bc, bk_pp, cnc_prorated,
+      callIncludesBestCase: s.callIncludesBestCase,
     })
-    return { bk_c, bk_p, bk_u, bk_pp, cnc_pipe, cnc_rev, cnc_prorated, weeks_total, weeks_remaining, fc_commit, fc_prob, fc_up, fc_full, bk_u_in_prob }
+    return { bk_wc, bk_call, bk_bc, bk_pp, cnc_pipe, cnc_rev, cnc_prorated, weeks_total, weeks_remaining, fc_worst_case, fc_call, fc_best_case, fc_full, bk_bc_in_call }
   }
 }
 
@@ -71,20 +102,20 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         sfdcUrl: '',
         quota: 0, closed: 0,
         ...DEFAULT_RATES, ...DEFAULT_PIPELINE, ...DEFAULT_CNC, ...DEFAULT_MONTHLY,
-        probIncludesUpside: false,
+        callIncludesBestCase: false,
         derived: {},
         importedData: null, importMeta: null, scopeSelected: null,
         previousImportSnapshot: null,
         activeView: 'manager',
-        forecastDefaults: { r_commit: 80, r_prob: 75, r_up: 50, r_pipe: 18, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
+        forecastDefaults: { r_worst_case: 80, r_call: 75, r_best_case: 50, r_pipe: 18, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
         fyStartMonth: 1,
 
         setField:  (key, value) => set(s => { s[key] = value }),
         setFields: (fields)     => set(s => { Object.assign(s, fields) }),
         recalc:    ()           => set(s => { s.derived = computeDerived(s) }),
 
-        toggleProbUpside: () => set(s => {
-          s.probIncludesUpside = !s.probIncludesUpside
+        toggleCallIncludesBestCase: () => set(s => {
+          s.callIncludesBestCase = !s.callIncludesBestCase
           s.derived = computeDerived(s)
         }),
 
@@ -98,14 +129,18 @@ function makeForecastStore(storeName, isNextQuarter = false) {
 
         applyForecastDefaults: () => set(s => {
           const d = s.forecastDefaults
-          s.r_commit = d.r_commit; s.r_prob = d.r_prob; s.r_up = d.r_up
-          s.r_pipe   = d.r_pipe;   s.r_cnc  = d.r_cnc
+          s.r_worst_case = d.r_worst_case; s.r_call = d.r_call; s.r_best_case = d.r_best_case
+          s.r_pipe       = d.r_pipe;       s.r_cnc  = d.r_cnc
           s.cnc_opps = d.cnc_opps; s.cnc_asp = d.cnc_asp
           s.derived  = computeDerived(s)
         }),
 
         loadShareState: (fields) => set(s => { SNAPSHOT_KEYS.forEach(k => { if (fields[k] !== undefined) s[k] = fields[k] }); s.derived = computeDerived(s) }),
-        loadSnapshot:   (snap)   => set(s => { SNAPSHOT_KEYS.forEach(k => { if (snap[k]   !== undefined) s[k] = snap[k]   }); s.derived = computeDerived(s) }),
+        loadSnapshot:   (snap)   => set(s => {
+          const migrated = migrateSnapshot(snap)
+          SNAPSHOT_KEYS.forEach(k => { if (migrated[k] !== undefined) s[k] = migrated[k] })
+          s.derived = computeDerived(s)
+        }),
 
         setImportData: (records, meta) => set(s => {
           // Save snapshot of current import for slippage detection on next import
@@ -150,14 +185,14 @@ function makeForecastStore(storeName, isNextQuarter = false) {
           managerName: s.managerName, managerTeam: s.managerTeam, quarterLabel: s.quarterLabel,
           monthUnlocked: s.monthUnlocked, sfdcUrl: s.sfdcUrl,
           quota: s.quota, closed: s.closed,
-          r_commit: s.r_commit, r_prob: s.r_prob, r_up: s.r_up, r_pipe: s.r_pipe, r_cnc: s.r_cnc,
-          pipe_commit: s.pipe_commit, pipe_prob: s.pipe_prob, pipe_up: s.pipe_up, pipe_pipe: s.pipe_pipe,
+          r_worst_case: s.r_worst_case, r_call: s.r_call, r_best_case: s.r_best_case, r_pipe: s.r_pipe, r_cnc: s.r_cnc,
+          pipe_worst_case: s.pipe_worst_case, pipe_call: s.pipe_call, pipe_best_case: s.pipe_best_case, pipe_pipe: s.pipe_pipe,
           cnc_opps: s.cnc_opps, cnc_asp: s.cnc_asp,
-          probIncludesUpside: s.probIncludesUpside,
+          callIncludesBestCase: s.callIncludesBestCase,
           activeView: s.activeView, forecastDefaults: s.forecastDefaults, fyStartMonth: s.fyStartMonth,
-          m1_closed: s.m1_closed, m1_commit: s.m1_commit, m1_prob: s.m1_prob, m1_up: s.m1_up,
-          m2_closed: s.m2_closed, m2_commit: s.m2_commit, m2_prob: s.m2_prob, m2_up: s.m2_up,
-          m3_closed: s.m3_closed, m3_commit: s.m3_commit, m3_prob: s.m3_prob, m3_up: s.m3_up,
+          m1_closed: s.m1_closed, m1_worst_case: s.m1_worst_case, m1_call: s.m1_call, m1_best_case: s.m1_best_case,
+          m2_closed: s.m2_closed, m2_worst_case: s.m2_worst_case, m2_call: s.m2_call, m2_best_case: s.m2_best_case,
+          m3_closed: s.m3_closed, m3_worst_case: s.m3_worst_case, m3_call: s.m3_call, m3_best_case: s.m3_best_case,
           previousImportSnapshot: s.previousImportSnapshot,
         }),
         onRehydrateStorage: () => (state) => {
@@ -175,8 +210,8 @@ function makeForecastStore(storeName, isNextQuarter = false) {
 }
 
 // ── Two independent quarter stores ─────────────────────────────
-const useCqStore = makeForecastStore('moat-forecast-cq', false)
-const useQ1Store = makeForecastStore('moat-forecast-q1', true)
+const useCqStore = makeForecastStore('moat-forecast-cq-v2', false)
+const useQ1Store = makeForecastStore('moat-forecast-q1-v2', true)
 
 // ── Quarter switcher store ─────────────────────────────────────
 export const useQuarterStore = create(
@@ -370,17 +405,17 @@ export const useWowStore = create(
           week: weekInQ,
           date: now.toISOString(),
           isAuto,
-          quarterKey:   aq,
-          quarterLabel: fs.quarterLabel || '',
-          fc_commit:    d.fc_commit   || 0,
-          fc_probable:  d.fc_prob     || 0,
-          fc_upside:    d.fc_up       || 0,
-          pipeline: (fs.pipe_commit || 0) + (fs.pipe_prob || 0) + (fs.pipe_up || 0) + (fs.pipe_pipe || 0),
+          quarterKey:    aq,
+          quarterLabel:  fs.quarterLabel || '',
+          fc_worst_case: d.fc_worst_case || 0,
+          fc_call:       d.fc_call       || 0,
+          fc_best_case:  d.fc_best_case  || 0,
+          pipeline: (fs.pipe_worst_case || 0) + (fs.pipe_call || 0) + (fs.pipe_best_case || 0) + (fs.pipe_pipe || 0),
           closed: fs.closed || 0,
           monthly: {
-            m1: { closed: fs.m1_closed || 0, commit: fs.m1_commit || 0, probable: fs.m1_prob || 0, upside: fs.m1_up || 0 },
-            m2: { closed: fs.m2_closed || 0, commit: fs.m2_commit || 0, probable: fs.m2_prob || 0, upside: fs.m2_up || 0 },
-            m3: { closed: fs.m3_closed || 0, commit: fs.m3_commit || 0, probable: fs.m3_prob || 0, upside: fs.m3_up || 0 },
+            m1: { closed: fs.m1_closed || 0, worst_case: fs.m1_worst_case || 0, call: fs.m1_call || 0, best_case: fs.m1_best_case || 0 },
+            m2: { closed: fs.m2_closed || 0, worst_case: fs.m2_worst_case || 0, call: fs.m2_call || 0, best_case: fs.m2_best_case || 0 },
+            m3: { closed: fs.m3_closed || 0, worst_case: fs.m3_worst_case || 0, call: fs.m3_call || 0, best_case: fs.m3_best_case || 0 },
           },
         })
       }),

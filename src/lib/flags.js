@@ -4,32 +4,32 @@ import { bizDaysFrom, isWeekday } from './fmt'
 export const STAGE_MIN_FC = {
   'discovery':          'pipeline',
   'qualification':      'pipeline',
-  'demo':               'upside',
-  'solution design':    'upside',
-  'value proposition':  'upside',
-  'business case':      'upside',
-  'proposal':           'upside',
-  'negotiation':        'probable',
-  'legal & commercial': 'probable',
-  'contract review':    'probable',
-  'verbal commit':      'probable',
+  'demo':               'best_case',
+  'solution design':    'best_case',
+  'value proposition':  'best_case',
+  'business case':      'best_case',
+  'proposal':           'best_case',
+  'negotiation':        'call',
+  'legal & commercial': 'call',
+  'contract review':    'call',
+  'verbal commit':      'call',
 }
 
 export const STAGE_MAX_FC = {
   'discovery':          'pipeline',
   'qualification':      'pipeline',
-  'demo':               'upside',
-  'solution design':    'upside',
-  'value proposition':  'upside',
-  'business case':      'probable',
-  'proposal':           'probable',
-  'negotiation':        'commit',
-  'legal & commercial': 'commit',
-  'contract review':    'commit',
-  'verbal commit':      'commit',
+  'demo':               'best_case',
+  'solution design':    'best_case',
+  'value proposition':  'best_case',
+  'business case':      'call',
+  'proposal':           'call',
+  'negotiation':        'worst_case',
+  'legal & commercial': 'worst_case',
+  'contract review':    'worst_case',
+  'verbal commit':      'worst_case',
 }
 
-export const CAT_RANK = { pipeline: 0, upside: 1, probable: 2, commit: 3 }
+export const CAT_RANK = { pipeline: 0, best_case: 1, call: 2, worst_case: 3 }
 
 export const MEDDPICC_FIELDS = [
   { key: 'f_metrics',      label: 'Metrics (M)',            flagId: 'MEDDPICC_M'  },
@@ -44,21 +44,21 @@ export const MEDDPICC_FIELDS = [
 export const EARLY_STAGES = ['discovery', 'qualification', 'demo']
 
 export const CAT_COLORS = {
-  closed:   '#0d7c3d',
-  commit:   '#1a56db',
-  probable: '#0d7c3d',
-  upside:   '#b45309',
-  pipeline: '#6b7280',
-  omitted:  '#9ca3af',
+  closed:     '#0d7c3d',
+  worst_case: '#1a56db',
+  call:       '#0d7c3d',
+  best_case:  '#b45309',
+  pipeline:   '#6b7280',
+  omitted:    '#9ca3af',
 }
 
 export const CAT_BG = {
-  closed:   '#f0fdf4',
-  commit:   '#eff6ff',
-  probable: '#f0fdf4',
-  upside:   '#fffbeb',
-  pipeline: '#f9fafb',
-  omitted:  '#f9fafb',
+  closed:     '#f0fdf4',
+  worst_case: '#eff6ff',
+  call:       '#f0fdf4',
+  best_case:  '#fffbeb',
+  pipeline:   '#f9fafb',
+  omitted:    '#f9fafb',
 }
 
 // ── Typed flag definitions ──────────────────────────────────────
@@ -67,7 +67,7 @@ export const CAT_BG = {
 export const FLAG_DEFS = {
   CLOSE_PAST:        { id: 'CLOSE_PAST',        label: 'Close date passed',             sev: 'critical', weight: 100 },
   CLOSE_3BD:         { id: 'CLOSE_3BD',          label: 'Close ≤3 biz days',             sev: 'critical', weight:  90 },
-  NO_NEXT_STEP:      { id: 'NO_NEXT_STEP',       label: 'Next step empty',               sev: 'critical', weight:  85 }, // sev/weight override at runtime for non-commit/prob
+  NO_NEXT_STEP:      { id: 'NO_NEXT_STEP',       label: 'Next step empty',               sev: 'critical', weight:  85 }, // sev/weight override at runtime for non-worst_case/call
   LAST_ACTIVITY_14D: { id: 'LAST_ACTIVITY_14D',  label: 'No activity 14d+',              sev: 'critical', weight:  80 },
   AMOUNT_ZERO:       { id: 'AMOUNT_ZERO',        label: 'Amount $0',                     sev: 'critical', weight:  75 },
   FC_TOO_HIGH:       { id: 'FC_TOO_HIGH',        label: 'FC too high for stage',         sev: 'critical', weight:  70 },
@@ -130,15 +130,15 @@ export function flagDeal(deal) {
     }
   }
 
-  // 3. Next step — critical for commit/probable, warn otherwise
+  // 3. Next step — critical for worst_case/call, warn otherwise
   if (!deal.f_next_step || deal.f_next_step.trim() === '') {
-    const isCrit = ['commit', 'probable'].includes(cat)
+    const isCrit = ['worst_case', 'call'].includes(cat)
     flags.push({ ...FLAG_DEFS.NO_NEXT_STEP, sev: isCrit ? 'critical' : 'warn', weight: isCrit ? 85 : 22 })
   }
 
-  // 4. MEDDPICC — commit/probable only, not early stage
+  // 4. MEDDPICC — worst_case/call only, not early stage
   const isEarlyStage = EARLY_STAGES.some(s => stage.includes(s))
-  if (['commit', 'probable'].includes(cat) && !isEarlyStage) {
+  if (['worst_case', 'call'].includes(cat) && !isEarlyStage) {
     MEDDPICC_FIELDS.forEach(({ key, flagId }) => {
       if (!(deal[key] || '').trim()) flags.push(FLAG_DEFS[flagId])
     })

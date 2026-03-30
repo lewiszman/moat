@@ -16,19 +16,19 @@ export default function PdfRoot() {
   const CORAL = '#E85D3A'
 
   const cards = [
-    { label: 'Commit forecast',  value: d.fc_commit || 0,  color: '#1a56db' },
-    { label: 'Probable forecast',value: d.fc_prob   || 0,  color: '#0d7c3d' },
-    { label: 'Upside forecast',  value: d.fc_up     || 0,  color: '#b45309' },
+    { label: 'Worst Case forecast', value: d.fc_worst_case || 0, color: '#1a56db' },
+    { label: 'Call forecast',       value: d.fc_call       || 0, color: '#0d7c3d' },
+    { label: 'Best Case forecast',  value: d.fc_best_case  || 0, color: '#b45309' },
   ]
 
   const qInfo = getFiscalQuarterInfo('current', s.fyStartMonth || 1)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   const ROWS = [
-    { label: 'Commit',   pipeKey: 'pipe_commit', rateKey: 'r_commit', expKey: 'bk_c',  color: '#1a56db' },
-    { label: 'Probable', pipeKey: 'pipe_prob',   rateKey: 'r_prob',   expKey: 'bk_p',  color: '#0d7c3d' },
-    { label: 'Upside',   pipeKey: 'pipe_up',     rateKey: 'r_up',     expKey: 'bk_u',  color: '#b45309' },
-    { label: 'Pipeline', pipeKey: 'pipe_pipe',   rateKey: 'r_pipe',   expKey: 'bk_pp', color: '#6b7280' },
+    { label: 'Worst Case', pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expKey: 'bk_wc',   color: '#1a56db' },
+    { label: 'Call',       pipeKey: 'pipe_call',       rateKey: 'r_call',       expKey: 'bk_call', color: '#0d7c3d' },
+    { label: 'Best Case',  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expKey: 'bk_bc',   color: '#b45309' },
+    { label: 'Pipeline',   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expKey: 'bk_pp',   color: '#6b7280' },
   ]
 
   const content = (
@@ -121,10 +121,10 @@ export default function PdfRoot() {
           </thead>
           <tbody>
             {[
-              { label: 'Closed',   keys: ['m1_closed','m2_closed','m3_closed'] },
-              { label: 'Commit',   keys: ['m1_commit','m2_commit','m3_commit'] },
-              { label: 'Probable', keys: ['m1_prob','m2_prob','m3_prob'] },
-              { label: 'Upside',   keys: ['m1_up','m2_up','m3_up'] },
+              { label: 'Closed',     keys: ['m1_closed','m2_closed','m3_closed'] },
+              { label: 'Worst Case', keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
+              { label: 'Call',       keys: ['m1_call','m2_call','m3_call'] },
+              { label: 'Best Case',  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
             ].map(row => {
               const vals = row.keys.map(k => s[k] || 0)
               const total = vals.reduce((a, b) => a + b, 0)

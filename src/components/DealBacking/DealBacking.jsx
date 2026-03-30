@@ -3,23 +3,23 @@ import { useForecastStore, useDealBackStore, useQuarterStore } from '../../store
 import { fmt } from '../../lib/fmt'
 
 const COLS = [
-  { key: 'commit',   label: 'Deal-Backed Commit',   accent: '#1a56db', sub: 'Counting on these to close' },
-  { key: 'probable', label: 'Deal-Backed Probable', accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
-  { key: 'upside',   label: 'Deal-Backed Upside',   accent: '#b45309', sub: 'Possible if things break right' },
-  { key: 'bench',    label: 'Bench',                accent: '#9ca3af', sub: 'Not counting this quarter' },
+  { key: 'worst_case', label: 'Deal-Backed Worst Case', accent: '#1a56db', sub: 'Counting on these to close' },
+  { key: 'call',       label: 'Deal-Backed Call',       accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
+  { key: 'best_case',  label: 'Deal-Backed Best Case',  accent: '#b45309', sub: 'Possible if things break right' },
+  { key: 'bench',      label: 'Bench',                  accent: '#9ca3af', sub: 'Not counting this quarter' },
 ]
 
 const CAT_PILL = {
-  commit:   'bg-blue-100 text-blue-700',
-  probable: 'bg-green-100 text-green-700',
-  upside:   'bg-amber-100 text-amber-700',
-  pipeline: 'bg-gray-100 text-gray-600',
-  closed:   'bg-green-100 text-green-700',
-  bench:    'bg-gray-100 text-gray-500',
+  worst_case: 'bg-blue-100 text-blue-700',
+  call:       'bg-green-100 text-green-700',
+  best_case:  'bg-amber-100 text-amber-700',
+  pipeline:   'bg-gray-100 text-gray-600',
+  closed:     'bg-green-100 text-green-700',
+  bench:      'bg-gray-100 text-gray-500',
 }
 
 function defaultCol(deal) {
-  const map = { closed: 'closed', commit: 'commit', probable: 'probable', upside: 'upside', pipeline: 'bench' }
+  const map = { closed: 'closed', worst_case: 'worst_case', call: 'call', best_case: 'best_case', pipeline: 'bench' }
   return map[deal.cat] || 'bench'
 }
 
@@ -147,15 +147,27 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
   const colAmt = colDealAmt + (cncInThisCol ? cncCard.acv : 0)
 
   const cumTotals = {
-    commit:   closed + totals.commit,
-    probable: closed + totals.commit + totals.probable,
-    upside:   closed + totals.commit + totals.probable + totals.upside,
+    worst_case: closed + totals.worst_case,
+    call:       closed + totals.worst_case + totals.call,
+    best_case:  closed + totals.worst_case + totals.call + totals.best_case,
   }
 
   const wfBands = {
-    commit:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }],
-    probable: [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }, { label: '+ DB Probable', amt: totals.probable, color: '#0d7c3d' }],
-    upside:   [{ label: 'Closed won', amt: closed, color: '#059669' }, { label: '+ DB Commit', amt: totals.commit, color: '#1a56db' }, { label: '+ DB Probable', amt: totals.probable, color: '#0d7c3d' }, { label: '+ DB Upside', amt: totals.upside, color: '#b45309' }],
+    worst_case: [
+      { label: 'Closed won',        amt: closed,            color: '#059669' },
+      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
+    ],
+    call: [
+      { label: 'Closed won',        amt: closed,            color: '#059669' },
+      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
+      { label: '+ DB Call',         amt: totals.call,       color: '#0d7c3d' },
+    ],
+    best_case: [
+      { label: 'Closed won',        amt: closed,            color: '#059669' },
+      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
+      { label: '+ DB Call',         amt: totals.call,       color: '#0d7c3d' },
+      { label: '+ DB Best Case',    amt: totals.best_case,  color: '#b45309' },
+    ],
   }
 
   const bands    = wfBands[col.key]
@@ -300,9 +312,9 @@ export default function DealBacking() {
   const closedAmt = deals.filter(d => d.closed).reduce((s, d) => s + d.acv, 0)
 
   // Totals include C&C card
-  const totals = { commit: 0, probable: 0, upside: 0, bench: 0 }
+  const totals = { worst_case: 0, call: 0, best_case: 0, bench: 0 }
   deals.filter(d => !d.closed).forEach(d => {
-    const col = effectivePositions[d.id] || 'upside'
+    const col = effectivePositions[d.id] || 'best_case'
     totals[col] = (totals[col] || 0) + d.acv
   })
   totals[cncPos] = (totals[cncPos] || 0) + cncAcv
@@ -334,9 +346,9 @@ export default function DealBacking() {
     )
   }
 
-  const cumC = closedAmt + totals.commit
-  const cumP = cumC + totals.probable
-  const cumU = cumP + totals.upside
+  const cumWc  = closedAmt + totals.worst_case
+  const cumC   = cumWc + totals.call
+  const cumBc  = cumC + totals.best_case
 
   return (
     <div className="px-4 py-6">
@@ -344,12 +356,12 @@ export default function DealBacking() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <div className="flex gap-3 flex-wrap flex-1">
           {[
-            { label: 'Quota',       val: fmt(quota),       color: '' },
-            { label: 'Closed Won',  val: fmt(closedAmt),   color: 'text-green-600' },
-            { label: 'DB Commit',    val: fmt(cumC),        color: 'text-blue-600' },
-            { label: 'DB Probable',  val: fmt(cumP),        color: 'text-green-700' },
-            { label: 'DB Upside',    val: fmt(cumU),        color: 'text-amber-700' },
-            { label: 'Benched',     val: fmt(totals.bench), color: 'text-gray-500' },
+            { label: 'Quota',          val: fmt(quota),            color: '' },
+            { label: 'Closed Won',     val: fmt(closedAmt),        color: 'text-green-600' },
+            { label: 'DB Worst Case',  val: fmt(cumWc),            color: 'text-blue-600' },
+            { label: 'DB Call',        val: fmt(cumC),             color: 'text-green-700' },
+            { label: 'DB Best Case',   val: fmt(cumBc),            color: 'text-amber-700' },
+            { label: 'Benched',        val: fmt(totals.bench),     color: 'text-gray-500' },
           ].map((s, i) => (
             <React.Fragment key={s.label}>
               {i > 0 && <div className="w-px self-stretch bg-[var(--bdr2)]" />}

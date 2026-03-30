@@ -94,7 +94,7 @@ function GeneralTab() {
 
   const handleClear = () => {
     if (!confirm('Clear all saved data? Forecast inputs will be reset.')) return
-    const MOAT_KEYS = ['moat-forecast-cq','moat-forecast-q1','moat-active-quarter','moat-inspector-v27','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','rail_expanded','theme']
+    const MOAT_KEYS = ['moat-forecast-cq-v2','moat-forecast-q1-v2','moat-active-quarter','moat-inspector-v27','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','rail_expanded','theme']
     MOAT_KEYS.forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
@@ -168,11 +168,11 @@ function DefaultsTab() {
   }
 
   const RATE_ROWS = [
-    { label: 'Commit rate',       key: 'r_commit', color: '#1a56db', min: 50, max: 100 },
-    { label: 'Probable rate',     key: 'r_prob',   color: '#0d7c3d', min: 30, max: 95  },
-    { label: 'Upside rate',       key: 'r_up',     color: '#b45309', min: 10, max: 80  },
-    { label: 'Pipeline rate',     key: 'r_pipe',   color: '#6b7280', min: 5,  max: 50  },
-    { label: 'Create & close rate', key: 'r_cnc',  color: '#6b7280', min: 5,  max: 50  },
+    { label: 'Worst Case rate',   key: 'r_worst_case', color: '#1a56db', min: 50, max: 100 },
+    { label: 'Call rate',         key: 'r_call',       color: '#0d7c3d', min: 30, max: 95  },
+    { label: 'Best Case rate',    key: 'r_best_case',  color: '#b45309', min: 10, max: 80  },
+    { label: 'Pipeline rate',     key: 'r_pipe',       color: '#6b7280', min: 5,  max: 50  },
+    { label: 'Create & close rate', key: 'r_cnc',      color: '#6b7280', min: 5,  max: 50  },
   ]
 
   return (
@@ -366,7 +366,7 @@ function FeedbackForm() {
   const handleSend = () => {
     if (!message.trim()) return
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    const body  = `${message}\n\n---\nVersion: v3.0 | ${today}`
+    const body  = `${message}\n\n---\nVersion: v3.1 | ${today}`
     const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
     window.location.href = href
     setSent(true)
@@ -414,9 +414,19 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
-    version: 'v3.0',
+    version: 'v3.1',
     date: 'Mar 2026',
     current: true,
+    items: [
+      ['Forecast categories renamed', 'Commit → Worst Case, Probable → Call, Upside → Best Case; Pipeline unchanged — applied across store fields, localStorage keys, Supabase snapshots, Slack output, and all UI labels'],
+      ['Legacy SFDC CSV import', 'Old "Commit", "Probable", "Upside" values from Salesforce exports continue to map correctly via normalizeFcCat()'],
+      ['Supabase session migration', 'Prior sessions saved with old field names are auto-migrated on restore — no data loss'],
+    ],
+  },
+  {
+    version: 'v3.0',
+    date: 'Mar 2026',
+    current: false,
     items: [
       ['Quarter management rebuilt', 'CQ and Q+1 are fully independent forecast states — all inputs, pipeline, monthly breakdown, C&C, WoW snapshots, and Deal-Backing positions isolated per quarter'],
       ['C&C proration quarter-aware', 'CQ prorates by weeks remaining; Q+1 uses full quarter value'],
@@ -519,7 +529,7 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v3.0'],
+            ['Version', 'v3.1'],
             ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],
