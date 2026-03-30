@@ -3,10 +3,15 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY)
+
+export const supabase = SUPABASE_ENABLED
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null
 
 // ── Auth ────────────────────────────────────────────────────────
 export function signInWithGoogle() {
+  if (!supabase) return Promise.resolve({ error: new Error('Auth not configured') })
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin + import.meta.env.BASE_URL },
@@ -14,6 +19,7 @@ export function signInWithGoogle() {
 }
 
 export function signOut() {
+  if (!supabase) return Promise.resolve()
   return supabase.auth.signOut()
 }
 
@@ -60,6 +66,7 @@ export function extractSnapshot(state) {
 // Auto-save: upsert the single rolling auto-save per user + quarter.
 // Avoids unbounded DB growth — one row per quarter gets refreshed.
 export async function autoSaveSession(userId, quarterLabel, snapshot) {
+  if (!supabase) return
   const safe = sanitizeSnapshot(snapshot)
   const { data: existing } = await supabase
     .from('sessions')
@@ -84,6 +91,7 @@ export async function autoSaveSession(userId, quarterLabel, snapshot) {
 
 // Named snapshot: always insert a new row
 export async function saveNamedSession(userId, quarterLabel, snapshot, label) {
+  if (!supabase) return
   const safe = sanitizeSnapshot(snapshot)
   return supabase.from('sessions').insert({
     user_id: userId,
@@ -96,6 +104,7 @@ export async function saveNamedSession(userId, quarterLabel, snapshot, label) {
 
 // List the last N sessions (metadata only — no snapshot blob)
 export async function listSessions(userId, limit = 20) {
+  if (!supabase) return { data: [], error: null }
   return supabase
     .from('sessions')
     .select('id, quarter_label, is_auto, label, created_at, updated_at')
@@ -107,6 +116,7 @@ export async function listSessions(userId, limit = 20) {
 // Fetch the full snapshot for a specific session (for restore)
 // userId is required as defence-in-depth alongside Supabase RLS
 export async function fetchSession(sessionId, userId) {
+  if (!supabase) return { data: null, error: new Error('Auth not configured') }
   let q = supabase.from('sessions').select('snapshot').eq('id', sessionId)
   if (userId) q = q.eq('user_id', userId)
   return q.single()
@@ -115,6 +125,7 @@ export async function fetchSession(sessionId, userId) {
 // Delete a session row
 // userId is required as defence-in-depth alongside Supabase RLS
 export async function deleteSession(sessionId, userId) {
+  if (!supabase) return
   let q = supabase.from('sessions').delete().eq('id', sessionId)
   if (userId) q = q.eq('user_id', userId)
   return q

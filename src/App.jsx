@@ -29,25 +29,29 @@ export default function App() {
 
   // On mount: initialise Supabase auth listener + share URL + quarter label
   useEffect(() => {
-    // Supabase auth — sync current session and listen for changes
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const user = session?.user ?? null
-      setUser(user)
-      initApiKey(user?.id)
-    })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      const user = session?.user ?? null
-      // On sign-in: migrate generic moat_apikey → user-scoped key
-      if (user) {
-        const generic = localStorage.getItem('moat_apikey')
-        if (generic) {
-          localStorage.setItem(`moat_apikey_${user.id}`, generic)
-          localStorage.removeItem('moat_apikey')
+    // Supabase auth — sync current session and listen for changes (no-op if not configured)
+    let subscription = null
+    if (supabase) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        const user = session?.user ?? null
+        setUser(user)
+        initApiKey(user?.id)
+      })
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+        const user = session?.user ?? null
+        // On sign-in: migrate generic moat_apikey → user-scoped key
+        if (user) {
+          const generic = localStorage.getItem('moat_apikey')
+          if (generic) {
+            localStorage.setItem(`moat_apikey_${user.id}`, generic)
+            localStorage.removeItem('moat_apikey')
+          }
         }
-      }
-      setUser(user)
-      initApiKey(user?.id)
-    })
+        setUser(user)
+        initApiKey(user?.id)
+      })
+      subscription = data.subscription
+    }
 
     // Share URL params
     const shared = parseShareUrl()
@@ -78,7 +82,7 @@ export default function App() {
       }
     }
 
-    return () => subscription.unsubscribe()
+    return () => subscription?.unsubscribe()
   }, []) // eslint-disable-line
 
   return (
