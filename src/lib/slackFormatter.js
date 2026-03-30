@@ -1,8 +1,8 @@
 // ── Slack message formatter ────────────────────────────────────
 // Pure function — no side effects, no imports from React
+import { getVocab } from './vocab'
 
 const CAT_ORDER = ['worst_case', 'call', 'best_case', 'pipeline']
-const CAT_LABEL = { worst_case: 'Worst Case', call: 'Call', best_case: 'Best Case', pipeline: 'Pipeline' }
 
 function fmtAmt(n) {
   if (!n || isNaN(n)) return '$0'
@@ -31,10 +31,11 @@ function groupForSlack(deals, groupBy) {
     }))
   }
   // default: by FC category
+  const vocab = getVocab()
   return CAT_ORDER
     .map(cat => ({
       key: cat,
-      label: CAT_LABEL[cat],
+      label: vocab[cat] ?? cat,
       deals: deals.filter(d => d.f_fc_cat_norm === cat),
     }))
     .filter(g => g.deals.length > 0)

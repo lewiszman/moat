@@ -1,6 +1,7 @@
 // ── Anthropic API ──────────────────────────────────────────────
+import { getVocab } from './vocab'
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a sales coach reviewing open opportunities. Forecast categories used in this app are: Worst Case, Call, Best Case, and Pipeline (replacing Commit, Probable, Upside). Produce structured output only — no prose, no headers, no intro.
+export const DEFAULT_SYSTEM_PROMPT = `You are a sales coach reviewing open opportunities. Produce structured output only — no prose, no headers, no intro.
 
 For each deal where you find an issue, output one line:
 DEAL: {exact deal name} | FLAG: {one of: missing date, past date, not tangible, weak next step, stale activity, close date risk, no meddpicc} | NOTE: {one sentence max 12 words}
@@ -10,9 +11,9 @@ Issues to flag:
 2. past date — the date in the next step has already passed
 3. not tangible — vague or generic (e.g. "follow up", "check in", "waiting to hear back")
 4. weak next step — lacks specificity about who, what, or when
-5. stale activity — last activity was 14+ days ago on a worst case or call deal
+5. stale activity — last activity was 14+ days ago on a high-confidence deal
 6. close date risk — close date is within 30 days but the next step lacks a concrete commitment action
-7. no meddpicc — deal is worst case or call with $50k+ value but zero MEDDPICC fields filled
+7. no meddpicc — high-confidence deal with $50k+ value but zero MEDDPICC fields filled
 
 Only output lines for deals with issues. If all are strong, output nothing except:
 SUMMARY: Next steps are well-maintained and specific.`
@@ -78,6 +79,9 @@ export async function fetchAISummary({
   signal,
 }) {
   const focusLine = coachingFocus ? `\n\nAdditional coaching focus: ${coachingFocus}` : ''
+  const v = getVocab()
+  const categoryContext = `Forecast categories in this app: ${v.worst_case} (highest confidence, committing to close), ${v.call} (strong intent, likely closes), ${v.best_case} (possible if things go well), ${v.pipeline} (early stage, future quarter). "High-confidence" means ${v.worst_case} or ${v.call}.`
+  const fullPrompt = categoryContext + '\n\n' + (systemPrompt || DEFAULT_SYSTEM_PROMPT)
 
   // Only worst_case/call/best_case — pipeline too early for meaningful next steps
   const actionableDeals = deals.filter(d => ['worst_case', 'call', 'best_case'].includes(d.f_fc_cat_norm))
@@ -125,7 +129,7 @@ export async function fetchAISummary({
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 600,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: fullPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
     }),
     signal,

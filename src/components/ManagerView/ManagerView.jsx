@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useForecastStore, useQuarterStore, useInspectorStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
 import CncWhatIf from './CncWhatIf'
@@ -40,6 +41,7 @@ export default function ManagerView() {
     setTimeout(() => document.body.removeAttribute('data-printing'), 1000)
   }
 
+  const vocab = useVocabStore(s => s.vocab)
   const defaultSfdcUrl = useInspectorStore(s => s.defaultSfdcUrl) || ''
   const sfdcUrl        = s.sfdcUrl || defaultSfdcUrl
   const sfdcEnabled = (() => {
@@ -169,11 +171,11 @@ export default function ManagerView() {
       </div>
       <div className="card p-4">
         {[
-          { label: 'Worst Case',     key: 'r_worst_case', color: '#1a56db', min: 50, max: 100 },
-          { label: 'Call',           key: 'r_call',       color: '#0d7c3d', min: 30, max: 95  },
-          { label: 'Best Case',      key: 'r_best_case',  color: '#b45309', min: 10, max: 80  },
-          { label: 'Pipeline',       key: 'r_pipe',       color: '#6b7280', min: 5,  max: 50  },
-          { label: 'Create & close', key: 'r_cnc',        color: '#6b7280', min: 5,  max: 50  },
+          { label: vocab.worst_case,  key: 'r_worst_case', color: '#1a56db', min: 50, max: 100 },
+          { label: vocab.call,        key: 'r_call',       color: '#0d7c3d', min: 30, max: 95  },
+          { label: vocab.best_case,   key: 'r_best_case',  color: '#b45309', min: 10, max: 80  },
+          { label: vocab.pipeline,    key: 'r_pipe',       color: '#6b7280', min: 5,  max: 50  },
+          { label: 'Create & close',  key: 'r_cnc',        color: '#6b7280', min: 5,  max: 50  },
         ].map(row => (
           <div key={row.key} className="flex items-center gap-4 py-2 border-b border-[var(--bdr2)] last:border-0">
             <span className="text-[13px] text-[var(--tx)] w-32 flex-shrink-0">{row.label}</span>

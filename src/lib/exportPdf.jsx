@@ -1,6 +1,7 @@
 import React from 'react'
 import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer'
 import { useForecastStore, useInspectorStore, useQuarterStore, useSectionComments } from '../store/forecastStore'
+import { getVocab } from './vocab'
 import { getFiscalQuarterInfo, fmt, attPct } from './fmt'
 
 // ── Colors ────────────────────────────────────────────────────────
@@ -86,24 +87,26 @@ const today = () => new Date().toLocaleDateString('en-US', { month: 'long', day:
 // ══════════════════════════════════════════════════════════════════
 
 function forecastPages(s, d, qInfo, comments, todayStr) {
+  const v = getVocab()
+
   const cards = [
-    { label: 'Worst Case', value: d.fc_worst_case || 0, color: BLUE },
-    { label: 'Call',       value: d.fc_call       || 0, color: GREEN },
-    { label: 'Best Case',  value: d.fc_best_case  || 0, color: AMBER },
+    { label: v.worst_case, value: d.fc_worst_case || 0, color: BLUE },
+    { label: v.call,       value: d.fc_call       || 0, color: GREEN },
+    { label: v.best_case,  value: d.fc_best_case  || 0, color: AMBER },
   ]
 
   const pipeRows = [
-    { label: 'Worst Case', pipe: s.pipe_worst_case, rate: s.r_worst_case, exp: d.bk_wc,   color: BLUE },
-    { label: 'Call',       pipe: s.pipe_call,       rate: s.r_call,       exp: d.bk_call, color: GREEN },
-    { label: 'Best Case',  pipe: s.pipe_best_case,  rate: s.r_best_case,  exp: d.bk_bc,   color: AMBER },
-    { label: 'Pipeline',   pipe: s.pipe_pipe,       rate: s.r_pipe,       exp: d.bk_pp,   color: GRAY },
+    { label: v.worst_case, pipe: s.pipe_worst_case, rate: s.r_worst_case, exp: d.bk_wc,   color: BLUE },
+    { label: v.call,       pipe: s.pipe_call,       rate: s.r_call,       exp: d.bk_call, color: GREEN },
+    { label: v.best_case,  pipe: s.pipe_best_case,  rate: s.r_best_case,  exp: d.bk_bc,   color: AMBER },
+    { label: v.pipeline,   pipe: s.pipe_pipe,       rate: s.r_pipe,       exp: d.bk_pp,   color: GRAY },
   ]
 
   const monthRows = [
-    { label: 'Closed',     keys: ['m1_closed','m2_closed','m3_closed'] },
-    { label: 'Worst Case', keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
-    { label: 'Call',       keys: ['m1_call','m2_call','m3_call'] },
-    { label: 'Best Case',  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
+    { label: v.closed,     keys: ['m1_closed','m2_closed','m3_closed'] },
+    { label: v.worst_case, keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
+    { label: v.call,       keys: ['m1_call','m2_call','m3_call'] },
+    { label: v.best_case,  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
   ]
 
   const commentEntries = Object.entries(comments || {})

@@ -320,7 +320,7 @@ export const useInspectorStore = create(
       clearUsageLog: () => set(s => { s.usageLog = [] }),
     })),
     {
-      name: 'moat-inspector-v27',
+      name: 'moat-inspector-v3',
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         systemPrompt: s.systemPrompt, coachingFocus: s.coachingFocus,

@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react'
 import { useForecastStore, useDealBackStore, useQuarterStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt } from '../../lib/fmt'
 
-const COLS = [
-  { key: 'worst_case', label: 'Deal-Backed Worst Case', accent: '#1a56db', sub: 'Counting on these to close' },
-  { key: 'call',       label: 'Deal-Backed Call',       accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
-  { key: 'best_case',  label: 'Deal-Backed Best Case',  accent: '#b45309', sub: 'Possible if things break right' },
-  { key: 'bench',      label: 'Bench',                  accent: '#9ca3af', sub: 'Not counting this quarter' },
+const COLS_BASE = [
+  { key: 'worst_case', accent: '#1a56db', sub: 'Counting on these to close' },
+  { key: 'call',       accent: '#0d7c3d', sub: 'Strong intent — likely closes' },
+  { key: 'best_case',  accent: '#b45309', sub: 'Possible if things break right' },
+  { key: 'bench',      accent: '#9ca3af', sub: 'Not counting this quarter', label: 'Bench' },
 ]
 
 const CAT_PILL = {
@@ -142,6 +143,7 @@ function CncCard({ onDragStart, onDragEnd, cncOverrides, setCncOverride, clearCn
 }
 
 function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop, onDragStart, onDragEnd, positions, cncCard, cncPos, cncBenchAcv }) {
+  const vocab = useVocabStore(s => s.vocab)
   const colDealAmt  = deals.reduce((s, d) => s + d.acv, 0)
   const cncInThisCol = cncCard && cncPos === col.key
   const colAmt = colDealAmt + (cncInThisCol ? cncCard.acv : 0)
@@ -154,19 +156,19 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
 
   const wfBands = {
     worst_case: [
-      { label: 'Closed won',        amt: closed,            color: '#059669' },
-      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
+      { label: 'Closed won',                      amt: closed,            color: '#059669' },
+      { label: `+ DB ${vocab.worst_case}`,         amt: totals.worst_case, color: '#1a56db' },
     ],
     call: [
-      { label: 'Closed won',        amt: closed,            color: '#059669' },
-      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
-      { label: '+ DB Call',         amt: totals.call,       color: '#0d7c3d' },
+      { label: 'Closed won',                      amt: closed,            color: '#059669' },
+      { label: `+ DB ${vocab.worst_case}`,         amt: totals.worst_case, color: '#1a56db' },
+      { label: `+ DB ${vocab.call}`,               amt: totals.call,       color: '#0d7c3d' },
     ],
     best_case: [
-      { label: 'Closed won',        amt: closed,            color: '#059669' },
-      { label: '+ DB Worst Case',   amt: totals.worst_case, color: '#1a56db' },
-      { label: '+ DB Call',         amt: totals.call,       color: '#0d7c3d' },
-      { label: '+ DB Best Case',    amt: totals.best_case,  color: '#b45309' },
+      { label: 'Closed won',                      amt: closed,            color: '#059669' },
+      { label: `+ DB ${vocab.worst_case}`,         amt: totals.worst_case, color: '#1a56db' },
+      { label: `+ DB ${vocab.call}`,               amt: totals.call,       color: '#0d7c3d' },
+      { label: `+ DB ${vocab.best_case}`,          amt: totals.best_case,  color: '#b45309' },
     ],
   }
 
@@ -262,6 +264,12 @@ export default function DealBacking() {
   const cnc_opps        = useForecastStore(s => s.cnc_opps)
   const cnc_asp         = useForecastStore(s => s.cnc_asp)
   const r_cnc           = useForecastStore(s => s.r_cnc)
+  const vocab           = useVocabStore(s => s.vocab)
+
+  const COLS = COLS_BASE.map(c => ({
+    ...c,
+    label: c.key === 'bench' ? 'Bench' : `Deal-Backed ${vocab[c.key] ?? c.key}`,
+  }))
 
   const db  = useDealBackStore()
   const aq  = useQuarterStore(s => s.activeQuarter)
@@ -356,12 +364,12 @@ export default function DealBacking() {
       <div className="flex items-center gap-4 mb-4 flex-wrap">
         <div className="flex gap-3 flex-wrap flex-1">
           {[
-            { label: 'Quota',          val: fmt(quota),            color: '' },
-            { label: 'Closed Won',     val: fmt(closedAmt),        color: 'text-green-600' },
-            { label: 'DB Worst Case',  val: fmt(cumWc),            color: 'text-blue-600' },
-            { label: 'DB Call',        val: fmt(cumC),             color: 'text-green-700' },
-            { label: 'DB Best Case',   val: fmt(cumBc),            color: 'text-amber-700' },
-            { label: 'Benched',        val: fmt(totals.bench),     color: 'text-gray-500' },
+            { label: 'Quota',                       val: fmt(quota),            color: '' },
+            { label: 'Closed Won',                val: fmt(closedAmt),        color: 'text-green-600' },
+            { label: `DB ${vocab.worst_case}`,    val: fmt(cumWc),            color: 'text-blue-600' },
+            { label: `DB ${vocab.call}`,          val: fmt(cumC),             color: 'text-green-700' },
+            { label: `DB ${vocab.best_case}`,     val: fmt(cumBc),            color: 'text-amber-700' },
+            { label: 'Benched',                   val: fmt(totals.bench),     color: 'text-gray-500' },
           ].map((s, i) => (
             <React.Fragment key={s.label}>
               {i > 0 && <div className="w-px self-stretch bg-[var(--bdr2)]" />}

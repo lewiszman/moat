@@ -1,11 +1,12 @@
 import React, { useState, useRef } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt, attPct, attVar, cl } from '../../lib/fmt'
 
 const CARDS_META = [
-  { id: 'worst_case', label: 'Worst Case forecast', color: '#1a56db', dot: '#1a56db' },
-  { id: 'call',       label: 'Call forecast',        color: '#0d7c3d', dot: '#0d7c3d' },
-  { id: 'best_case',  label: 'Best Case forecast',   color: '#b45309', dot: '#b45309' },
+  { id: 'worst_case', color: '#1a56db', dot: '#1a56db' },
+  { id: 'call',       color: '#0d7c3d', dot: '#0d7c3d' },
+  { id: 'best_case',  color: '#b45309', dot: '#b45309' },
 ]
 
 const CAT_SEG_COLORS = {
@@ -14,6 +15,7 @@ const CAT_SEG_COLORS = {
 }
 
 function QuotaBar({ quota, closed, bk_wc, bk_call, cnc_prorated, bk_bc, fc_best_case }) {
+  const vocab = useVocabStore(s => s.vocab)
   if (!quota) return null
   const cap = (v, rem) => Math.max(0, Math.min(rem, (v / quota) * 100))
   const wC      = cap(closed,        100)
@@ -32,11 +34,11 @@ function QuotaBar({ quota, closed, bk_wc, bk_call, cnc_prorated, bk_bc, fc_best_
     { w: wBkBc,   bg: CAT_SEG_COLORS.best_case },
   ]
   const legends = [
-    { label: 'Closed',     bg: CAT_SEG_COLORS.closed },
-    { label: 'C&C',        bg: CAT_SEG_COLORS.cnc },
-    { label: 'Worst Case', bg: CAT_SEG_COLORS.worst_case },
-    { label: 'Call',       bg: CAT_SEG_COLORS.call },
-    { label: 'Best Case',  bg: CAT_SEG_COLORS.best_case },
+    { label: vocab.closed,     bg: CAT_SEG_COLORS.closed },
+    { label: 'C&C',            bg: CAT_SEG_COLORS.cnc },
+    { label: vocab.worst_case, bg: CAT_SEG_COLORS.worst_case },
+    { label: vocab.call,       bg: CAT_SEG_COLORS.call },
+    { label: vocab.best_case,  bg: CAT_SEG_COLORS.best_case },
   ]
 
   return (
@@ -166,6 +168,7 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
 
 export default function ForecastCards() {
   const s = useForecastStore()
+  const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
   const { quota, closed } = s
   const { bk_wc, bk_call, bk_bc, cnc_rev, cnc_prorated, fc_worst_case, fc_call, fc_best_case, bk_bc_in_call } = d
@@ -181,7 +184,6 @@ export default function ForecastCards() {
   const copyImage = async () => {
     const el = document.getElementById('fc-cards-container')
     if (!el) return
-    // Expand all temporarily
     const prev = { ...expanded }
     setExpanded(CARDS_META.reduce((a, m) => ({ ...a, [m.id]: true }), {}))
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
@@ -220,54 +222,56 @@ export default function ForecastCards() {
         className="w-1.5 h-1.5 rounded-full flex-shrink-0 transition-colors duration-150"
         style={{ background: s.callIncludesBestCase ? '#b45309' : '#d1d5db' }}
       />
-      {s.callIncludesBestCase ? '½ Best Case included' : '+ ½ Best Case?'}
+      {s.callIncludesBestCase ? `½ ${vocab.best_case} included` : `+ ½ ${vocab.best_case}?`}
     </button>
   )
 
+  const cardsMeta = CARDS_META.map(m => ({ ...m, label: `${vocab[m.id]} forecast` }))
+
   const cards = [
     {
-      meta: CARDS_META[0],
+      meta: cardsMeta[0],
       fc: fc_worst_case || 0,
       rows: [
-        { l: 'Closed QTD',            v: fmt(closed) },
-        { l: '+ Worst Case bookings', v: fmt(bk_wc) },
-        { l: '+ C&C (prorated)',       v: fmt(cnc_prorated), cnc: true },
+        { l: 'Closed QTD',                          v: fmt(closed) },
+        { l: `+ ${vocab.worst_case} bookings`,       v: fmt(bk_wc) },
+        { l: '+ C&C (prorated)',                     v: fmt(cnc_prorated), cnc: true },
       ],
       detailRows: [
-        { l: 'Conversion rate',            v: `${s.r_worst_case}%` },
-        { l: 'Open worst case pipeline',   v: fmt(s.pipe_worst_case) },
-        { l: 'Expected bookings',          v: fmt(bk_wc) },
-        { l: 'C&C prorated',               v: fmt(cnc_prorated) },
+        { l: 'Conversion rate',                      v: `${s.r_worst_case}%` },
+        { l: `Open ${vocab.worst_case} pipeline`,    v: fmt(s.pipe_worst_case) },
+        { l: 'Expected bookings',                    v: fmt(bk_wc) },
+        { l: 'C&C prorated',                         v: fmt(cnc_prorated) },
       ],
     },
     {
-      meta: CARDS_META[1],
+      meta: cardsMeta[1],
       fc: fc_call || 0,
       rows: [
-        { l: 'Worst Case FC',          v: fmt(fc_worst_case) },
-        { l: '+ Call bookings',        v: fmt(bk_call) },
-        ...(bk_bc_in_call > 0 ? [{ l: '+ ½ Best Case bookings', v: fmt(bk_bc_in_call), best_case: true }] : []),
+        { l: `${vocab.worst_case} FC`,               v: fmt(fc_worst_case) },
+        { l: `+ ${vocab.call} bookings`,             v: fmt(bk_call) },
+        ...(bk_bc_in_call > 0 ? [{ l: `+ ½ ${vocab.best_case} bookings`, v: fmt(bk_bc_in_call), best_case: true }] : []),
       ],
       detailRows: [
-        { l: 'Conversion rate',        v: `${s.r_call}%` },
-        { l: 'Open call pipeline',     v: fmt(s.pipe_call) },
-        { l: 'Expected bookings',      v: fmt(bk_call) },
-        ...(bk_bc_in_call > 0 ? [{ l: '+ ½ Best Case bookings', v: fmt(bk_bc_in_call) }] : []),
+        { l: 'Conversion rate',                      v: `${s.r_call}%` },
+        { l: `Open ${vocab.call} pipeline`,          v: fmt(s.pipe_call) },
+        { l: 'Expected bookings',                    v: fmt(bk_call) },
+        ...(bk_bc_in_call > 0 ? [{ l: `+ ½ ${vocab.best_case} bookings`, v: fmt(bk_bc_in_call) }] : []),
       ],
       toggleEl: <CallToggle />,
     },
     {
-      meta: CARDS_META[2],
+      meta: cardsMeta[2],
       fc: fc_best_case || 0,
       rows: [
-        { l: 'Call FC',                                                                           v: fmt(fc_call) },
-        { l: bk_bc_in_call > 0 ? '+ remaining ½ Best Case' : '+ Best Case bookings',            v: fmt((bk_bc || 0) - (bk_bc_in_call || 0)) },
+        { l: `${vocab.call} FC`,                                                                                    v: fmt(fc_call) },
+        { l: bk_bc_in_call > 0 ? `+ remaining ½ ${vocab.best_case}` : `+ ${vocab.best_case} bookings`,            v: fmt((bk_bc || 0) - (bk_bc_in_call || 0)) },
       ],
       detailRows: [
-        { l: 'Conversion rate',          v: `${s.r_best_case}%` },
-        { l: 'Open best case pipeline',  v: fmt(s.pipe_best_case) },
-        { l: 'Expected bookings',        v: fmt(bk_bc) },
-        ...(bk_bc_in_call > 0 ? [{ l: '(½ already in Call)', v: '' }] : []),
+        { l: 'Conversion rate',                      v: `${s.r_best_case}%` },
+        { l: `Open ${vocab.best_case} pipeline`,     v: fmt(s.pipe_best_case) },
+        { l: 'Expected bookings',                    v: fmt(bk_bc) },
+        ...(bk_bc_in_call > 0 ? [{ l: `(½ already in ${vocab.call})`, v: '' }] : []),
       ],
     },
   ]

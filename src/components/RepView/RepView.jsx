@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useVocabStore } from '../../lib/vocab'
 
 const CATEGORIES = [
   {
@@ -68,16 +69,6 @@ const CATEGORIES = [
   },
 ]
 
-// Arithmetic mirrors forecastStore.js calcForecast():
-//   fc_worst_case = closed + bk_wc + cnc_prorated
-//   fc_call       = fc_worst_case + bk_call + bk_bc_in_call   (no C&C — it's in Worst Case)
-//   fc_best_case  = fc_call + (bk_bc − bk_bc_in_call)
-const ARITHMETIC = [
-  { label: 'Worst Case FC', formula: 'Closed + Worst Case bookings + C&C (prorated)',          color: '#1a56db' },
-  { label: 'Call FC',       formula: 'Worst Case FC + Call bookings (+ ½ Best Case if on)',    color: '#0d7c3d' },
-  { label: 'Best Case FC',  formula: 'Call FC + Best Case bookings (− ½ if folded in)',        color: '#b45309' },
-  { label: 'Full FC',       formula: 'Best Case FC + Pipeline bookings',                        color: '#6b7280' },
-]
 
 function CategoryCard({ cat }) {
   const [open, setOpen] = useState(false)
@@ -124,14 +115,15 @@ function CategoryCard({ cat }) {
   )
 }
 
-function RollupDiagram() {
+function RollupDiagram({ rows }) {
+  const vocab = useVocabStore(s => s.vocab)
   return (
     <div className="card overflow-hidden">
       <div className="px-4 py-2.5 bg-[var(--bg2)] border-b border-[var(--bdr2)] text-[11px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
         Forecast arithmetic
       </div>
       <div className="px-4 py-4 flex flex-col gap-0">
-        {ARITHMETIC.map((row, i) => (
+        {rows.map((row, i) => (
           <div key={row.label} className="relative">
             {/* Connector line */}
             {i > 0 && (
@@ -153,8 +145,8 @@ function RollupDiagram() {
       </div>
       <div className="px-4 pb-4">
         <div className="rounded-lg p-3 text-[11px] text-[var(--tx2)] leading-relaxed" style={{ background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-          <strong className="text-[#0d7c3d]">Best Case toggle:</strong> When enabled, 50% of Best Case bookings fold into Call FC.
-          Best Case FC always reflects 100% of Best Case pipeline regardless.
+          <strong className="text-[#0d7c3d]">{vocab.best_case} toggle:</strong> When enabled, 50% of {vocab.best_case} bookings fold into {vocab.call} FC.
+          {vocab.best_case} FC always reflects 100% of {vocab.best_case} pipeline regardless.
         </div>
       </div>
     </div>
@@ -162,6 +154,28 @@ function RollupDiagram() {
 }
 
 export default function RepView() {
+  const vocab = useVocabStore(s => s.vocab)
+
+  const categoriesWithLabels = CATEGORIES.map(c => ({
+    ...c,
+    label: vocab[c.key] ?? c.label,
+  }))
+
+  const arithmeticWithLabels = [
+    { label: `${vocab.worst_case} FC`, formula: `Closed + ${vocab.worst_case} bookings + C&C (prorated)`,         color: '#1a56db' },
+    { label: `${vocab.call} FC`,       formula: `${vocab.worst_case} FC + ${vocab.call} bookings (+ ½ ${vocab.best_case} if on)`, color: '#0d7c3d' },
+    { label: `${vocab.best_case} FC`,  formula: `${vocab.call} FC + ${vocab.best_case} bookings (− ½ if folded in)`, color: '#b45309' },
+    { label: 'Full FC',                formula: `${vocab.best_case} FC + ${vocab.pipeline} bookings`,               color: '#6b7280' },
+  ]
+
+  const filingTips = [
+    [`Be conservative with ${vocab.worst_case}`, `If you're not sure, it's ${vocab.call}. Broken ${vocab.worst_case.toLowerCase()} calls damage manager credibility upward.`],
+    ['Update close dates weekly', 'A past close date is an automatic red flag in the Inspector. Keep dates real.'],
+    ['Fill MEDDPICC fields', `Thin fields in ${vocab.worst_case}/${vocab.call} deals trigger warnings. Specificity builds trust.`],
+    ['Own your next step', "Next steps should be AE-owned, future-dated actions — not 'waiting on prospect.'"],
+    [`Be honest about ${vocab.best_case}`, `${vocab.best_case} means it could close if things go perfectly. It's not a parking lot for slipped deals.`],
+  ]
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
 
@@ -183,23 +197,17 @@ export default function RepView() {
 
       {/* Categories */}
       <div className="sec-hd">Forecast categories</div>
-      {CATEGORIES.map(cat => <CategoryCard key={cat.key} cat={cat} />)}
+      {categoriesWithLabels.map(cat => <CategoryCard key={cat.key} cat={cat} />)}
 
       {/* Rollup */}
       <div className="sec-hd mt-6">How numbers roll up</div>
-      <RollupDiagram />
+      <RollupDiagram rows={arithmeticWithLabels} />
 
       {/* Filing tips */}
       <div className="sec-hd mt-6">Filing tips for AEs</div>
       <div className="card p-4">
         <ul className="flex flex-col gap-3">
-          {[
-            ["Be conservative with Worst Case", "If you're not sure, it's Call. Broken worst-case calls damage manager credibility upward."],
-            ["Update close dates weekly", "A past close date is an automatic red flag in the Inspector. Keep dates real."],
-            ["Fill MEDDPICC fields", "Thin fields in Worst Case/Call deals trigger warnings. Specificity builds trust."],
-            ["Own your next step", "Next steps should be AE-owned, future-dated actions — not 'waiting on prospect.'"],
-            ["Be honest about Best Case", "Best Case means it could close if things go perfectly. It's not a parking lot for slipped deals."],
-          ].map(([title, desc]) => (
+          {filingTips.map(([title, desc]) => (
             <li key={title} className="flex items-start gap-3 text-[12px]">
               <span className="text-[var(--blue)] font-[700] flex-shrink-0 mt-0.5">→</span>
               <span className="text-[var(--tx)]">

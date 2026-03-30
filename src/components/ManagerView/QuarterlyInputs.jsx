@@ -1,5 +1,6 @@
 import React from 'react'
 import { useForecastStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt, parseMoney } from '../../lib/fmt'
 import SectionComment from '../shared/SectionComment'
 
@@ -67,13 +68,14 @@ function PipelineRow({ label, pipeKey, rateKey, expId, pill, pillColor }) {
 
 export default function QuarterlyInputs() {
   const s = useForecastStore()
+  const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
 
   const ROWS = [
-    { label: 'Worst Case', pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expId: 'bk_wc',   pill: 'worst case', pillColor: '#1a56db' },
-    { label: 'Call',       pipeKey: 'pipe_call',       rateKey: 'r_call',       expId: 'bk_call', pill: 'call',       pillColor: '#0d7c3d' },
-    { label: 'Best Case',  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expId: 'bk_bc',   pill: 'best case',  pillColor: '#b45309' },
-    { label: 'Pipeline',   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expId: 'bk_pp',   pill: 'pipeline',   pillColor: '#6b7280' },
+    { label: vocab.worst_case, pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expId: 'bk_wc',   pill: vocab.worst_case.toLowerCase(), pillColor: '#1a56db' },
+    { label: vocab.call,       pipeKey: 'pipe_call',       rateKey: 'r_call',       expId: 'bk_call', pill: vocab.call.toLowerCase(),       pillColor: '#0d7c3d' },
+    { label: vocab.best_case,  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expId: 'bk_bc',   pill: vocab.best_case.toLowerCase(),  pillColor: '#b45309' },
+    { label: vocab.pipeline,   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expId: 'bk_pp',   pill: vocab.pipeline.toLowerCase(),   pillColor: '#6b7280' },
   ]
 
   return (

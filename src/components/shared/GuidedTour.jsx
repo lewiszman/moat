@@ -1,65 +1,67 @@
 import React, { useEffect } from 'react'
 import { useInspectorStore } from '../../store/forecastStore'
-
-const STEPS = [
-  {
-    title: 'Pull your SFDC report',
-    description: 'Click the SFDC button beside Import CSV. Filter for CQ or NQ, then export as a detailed CSV report.',
-    chip: null,
-    view: null,
-  },
-  {
-    title: 'Import pipeline data',
-    description: 'Drop your CSV into the import wizard. MOAT maps columns automatically and populates your pipeline inputs.',
-    chip: '→ Manager Walk-Up',
-    view: 'manager',
-  },
-  {
-    title: 'Review conversion rates',
-    description: 'Check that your Worst Case, Call, Best Case, and C&C rates reflect your team\'s historical close rates this quarter.',
-    chip: '→ Manager Walk-Up',
-    view: 'manager',
-  },
-  {
-    title: 'Set your Create & Close inputs',
-    description: 'Enter qualified opps to create, average deal size, and win rate. C&C bookings are prorated by selling weeks remaining and included in your Worst Case forecast.',
-    chip: '→ Manager Walk-Up',
-    view: 'manager',
-  },
-  {
-    title: 'Read your forecast',
-    description: "Review Worst Case, Call, and Best Case forecasts. Toggle '+ ½ Best Case' on the Call card if you want to include half your best case bookings in your Call forecast.",
-    chip: '→ Manager Walk-Up',
-    view: 'manager',
-  },
-  {
-    title: "Capture this week's forecast",
-    description: 'Take a manual snapshot in the Week-over-Week tracker to record your forecast baseline. Auto-snapshots fire every Monday.',
-    chip: '→ Manager Walk-Up',
-    view: 'manager',
-  },
-  {
-    title: 'Run the Pipeline Inspector',
-    description: 'Click Run to flag hygiene issues across your deals — close dates, next steps, MEDDPICC gaps. Copy flagged deals directly to Slack per rep or per forecast category.',
-    chip: '→ Pipeline Inspector',
-    view: 'inspector',
-  },
-  {
-    title: 'Add your Anthropic API key',
-    description: 'If you have a Claude API key, add it in Settings → Inspector. AI Flags will assess next step quality on every deal — no key needed for rules-based inspection.',
-    chip: '→ Settings',
-    view: 'settings',
-  },
-  {
-    title: 'Moneyballer your forecast',
-    description: 'At month or quarter end, go to Deal-Backing. Drag deals into Deal-Backed Worst Case, Call, and Best Case to build a bottoms-up path to your number. The C&C card is always available at the top of each column.',
-    chip: '→ Deal-Backing',
-    view: 'dealback',
-  },
-]
+import { useVocabStore } from '../../lib/vocab'
 
 export default function GuidedTour({ onClose, onNavigate }) {
   const defaultSfdcUrl = useInspectorStore(s => s.defaultSfdcUrl) || ''
+  const vocab = useVocabStore(s => s.vocab)
+
+  const STEPS = [
+    {
+      title: 'Pull your SFDC report',
+      description: 'Click the SFDC button beside Import CSV. Filter for CQ or NQ, then export as a detailed CSV report.',
+      chip: null,
+      view: null,
+    },
+    {
+      title: 'Import pipeline data',
+      description: 'Drop your CSV into the import wizard. MOAT maps columns automatically and populates your pipeline inputs.',
+      chip: '→ Manager Walk-Up',
+      view: 'manager',
+    },
+    {
+      title: 'Review conversion rates',
+      description: `Check that your ${vocab.worst_case}, ${vocab.call}, ${vocab.best_case}, and C&C rates reflect your team's historical close rates this quarter.`,
+      chip: '→ Manager Walk-Up',
+      view: 'manager',
+    },
+    {
+      title: 'Set your Create & Close inputs',
+      description: `Enter qualified opps to create, average deal size, and win rate. C&C bookings are prorated by selling weeks remaining and included in your ${vocab.worst_case} forecast.`,
+      chip: '→ Manager Walk-Up',
+      view: 'manager',
+    },
+    {
+      title: 'Read your forecast',
+      description: `Review ${vocab.worst_case}, ${vocab.call}, and ${vocab.best_case} forecasts. Toggle '+ ½ ${vocab.best_case}' on the ${vocab.call} card if you want to include half your ${vocab.best_case.toLowerCase()} bookings in your ${vocab.call} forecast.`,
+      chip: '→ Manager Walk-Up',
+      view: 'manager',
+    },
+    {
+      title: "Capture this week's forecast",
+      description: 'Take a manual snapshot in the Week-over-Week tracker to record your forecast baseline. Auto-snapshots fire every Monday.',
+      chip: '→ Manager Walk-Up',
+      view: 'manager',
+    },
+    {
+      title: 'Run the Pipeline Inspector',
+      description: 'Click Run to flag hygiene issues across your deals — close dates, next steps, MEDDPICC gaps. Copy flagged deals directly to Slack per rep or per forecast category.',
+      chip: '→ Pipeline Inspector',
+      view: 'inspector',
+    },
+    {
+      title: 'Add your Anthropic API key',
+      description: 'If you have a Claude API key, add it in Settings → Inspector. AI Flags will assess next step quality on every deal — no key needed for rules-based inspection.',
+      chip: '→ Settings',
+      view: 'settings',
+    },
+    {
+      title: 'Moneyballer your forecast',
+      description: `At month or quarter end, go to Deal-Backing. Drag deals into Deal-Backed ${vocab.worst_case}, ${vocab.call}, and ${vocab.best_case} to build a bottoms-up path to your number. The C&C card is always available at the top of each column.`,
+      chip: '→ Deal-Backing',
+      view: 'dealback',
+    },
+  ]
 
   useEffect(() => {
     const handler = (e) => { if (e.key === 'Escape') onClose() }

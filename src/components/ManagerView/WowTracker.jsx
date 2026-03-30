@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useWowStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt, parseMoney } from '../../lib/fmt'
 
 function DeltaBadge({ curr, prev }) {
@@ -36,6 +37,7 @@ export default function WowTracker() {
   const wow = useWowStore()
   const fs  = useForecastStore()
   const aq  = useQuarterStore(s => s.activeQuarter)
+  const vocab = useVocabStore(s => s.vocab)
 
   // Resolve actual closed for active quarter (supports legacy scalar + new object format)
   const resolveActual = () => {
@@ -90,7 +92,7 @@ export default function WowTracker() {
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-[var(--bdr2)] bg-[var(--bg2)]">
-                  {['Week', 'Date', 'Worst Case FC', 'Call FC', 'Best Case FC', 'Pipeline', 'Closed QTD', ''].map((h, i) => (
+                  {['Week', 'Date', `${vocab.worst_case} FC`, `${vocab.call} FC`, `${vocab.best_case} FC`, vocab.pipeline, 'Closed QTD', ''].map((h, i) => (
                     <th key={i} className={`px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] ${i >= 2 && i <= 6 ? 'text-right' : 'text-left'}`}>
                       {h}
                     </th>

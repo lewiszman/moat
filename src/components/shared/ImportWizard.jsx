@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback } from 'react'
 import Papa from 'papaparse'
 import { useForecastStore } from '../../store/forecastStore'
+import { getVocab } from '../../lib/vocab'
 import { normalizeRecords } from '../../lib/import'
 
 const FIELD_DEFS = [
@@ -186,7 +187,7 @@ export default function ImportWizard({ onClose }) {
                   <td className="px-2 py-2 max-w-[100px] truncate">{row.f_stage || '—'}</td>
                   <td className="px-2 py-2">
                     <span className="text-[9px] font-[700] uppercase px-1.5 py-0.5 rounded-full bg-[var(--bg2)] border border-[var(--bdr2)]">
-                      {row.f_fc_cat_norm || '—'}
+                      {getVocab()[row.f_fc_cat_norm] ?? row.f_fc_cat_norm ?? '—'}
                     </span>
                   </td>
                 </tr>

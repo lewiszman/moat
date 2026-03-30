@@ -4,19 +4,20 @@ import { useSessionStore } from '../../store/sessionStore'
 import { flagDeal, groupByRep, dealWeight, FLAG_DEF_LIST } from '../../lib/flags'
 import { fetchAISummary, fetchManagerInsights, findDealAction, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { formatSlackMessage } from '../../lib/slackFormatter'
+import { getVocab, useVocabStore } from '../../lib/vocab'
 import { fmt } from '../../lib/fmt'
 
 const CAT_ORDER  = ['worst_case', 'call', 'best_case', 'pipeline']
-const CAT_LABEL  = { worst_case: 'Worst Case', call: 'Call', best_case: 'Best Case', pipeline: 'Pipeline' }
 const CAT_ACCENT = { worst_case: '#1a56db', call: '#0d7c3d', best_case: '#b45309', pipeline: '#6b7280' }
 
 // ── Grouping helpers ──────────────────────────────────────────
 
 function buildGroups(deals, groupBy) {
+  const vocab = getVocab()
   if (groupBy === 'category') {
     return CAT_ORDER
       .map(cat => ({
-        key: cat, label: CAT_LABEL[cat], accent: CAT_ACCENT[cat],
+        key: cat, label: vocab[cat] ?? cat, accent: CAT_ACCENT[cat],
         deals: deals.filter(d => d.f_fc_cat_norm === cat),
       }))
       .filter(g => g.deals.length > 0)
@@ -34,7 +35,7 @@ function buildGroups(deals, groupBy) {
         deals: ds,
         subGroups: CAT_ORDER
           .map(cat => ({
-            key: cat, label: CAT_LABEL[cat], accent: CAT_ACCENT[cat],
+            key: cat, label: vocab[cat] ?? cat, accent: CAT_ACCENT[cat],
             deals: ds.filter(d => d.f_fc_cat_norm === cat),
           }))
           .filter(sg => sg.deals.length > 0),
@@ -198,7 +199,7 @@ function DealRow({ deal, cols, repResult }) {
       {cols.fc       && (
         <td className="px-3 py-2">
           <span className="text-[10px] font-[700] uppercase tracking-wide" style={{ color: CAT_ACCENT[deal.f_fc_cat_norm] || '#6b7280' }}>
-            {CAT_LABEL[deal.f_fc_cat_norm] || deal.f_fc_cat_norm || '—'}
+            {getVocab()[deal.f_fc_cat_norm] ?? deal.f_fc_cat_norm ?? '—'}
           </span>
         </td>
       )}
@@ -622,6 +623,7 @@ export default function Inspector() {
   const quarterLabel  = useForecastStore(s => s.quarterLabel)
   const insp          = useInspectorStore()
   const { user }      = useSessionStore()
+  useVocabStore(s => s.vocab) // subscribe for reactivity when labels change
 
   const apiKey       = insp.apiKey
   const aiActive     = insp.aiEnabled && !!apiKey
@@ -965,7 +967,7 @@ export default function Inspector() {
         )}
         <MultiSelect
           label="Category"
-          options={allCats.map(c => ({ value: c, label: CAT_LABEL[c] }))}
+          options={allCats.map(c => ({ value: c, label: getVocab()[c] ?? c }))}
           value={filterCats}
           onChange={setFilterCats}
         />

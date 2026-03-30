@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useInspectorStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useVocabStore, DEFAULT_VOCAB } from '../../lib/vocab'
 import { DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { fmt } from '../../lib/fmt'
 
@@ -62,11 +63,29 @@ function GeneralTab() {
   const s           = useForecastStore()
   const inspector   = useInspectorStore()
   const activeQuarter = useQuarterStore(st => st.activeQuarter)
+  const vocabStore  = useVocabStore()
 
   const [sfdcInput, setSfdcInput]     = useState(s.sfdcUrl || '')
   const [sfdcError, setSfdcError]     = useState('')
   const [defaultInput, setDefaultInput] = useState(inspector.defaultSfdcUrl || '')
   const [defaultError, setDefaultError] = useState('')
+
+  // Vocab draft state
+  const [vocabDraft, setVocabDraft] = useState({ ...vocabStore.vocab })
+  const [vocabSaved, setVocabSaved] = useState(false)
+
+  const handleVocabSave = () => {
+    Object.entries(vocabDraft).forEach(([key, label]) => {
+      vocabStore.setVocabLabel(key, label)
+    })
+    setVocabSaved(true)
+    setTimeout(() => setVocabSaved(false), 2000)
+  }
+
+  const handleVocabReset = () => {
+    vocabStore.resetVocab()
+    setVocabDraft({ ...DEFAULT_VOCAB })
+  }
 
   const overrideLabel = activeQuarter === 'q1' ? 'Q+1 Override' : 'CQ Override'
 
@@ -94,7 +113,7 @@ function GeneralTab() {
 
   const handleClear = () => {
     if (!confirm('Clear all saved data? Forecast inputs will be reset.')) return
-    const MOAT_KEYS = ['moat-forecast-cq-v2','moat-forecast-q1-v2','moat-active-quarter','moat-inspector-v27','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','rail_expanded','theme']
+    const MOAT_KEYS = ['moat-forecast-cq-v2','moat-forecast-q1-v2','moat-active-quarter','moat-inspector-v3','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','moat-vocab','rail_expanded','theme']
     MOAT_KEYS.forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
@@ -139,6 +158,35 @@ function GeneralTab() {
             ))}
           </select>
         </Row>
+      </Section>
+      <Section title="Forecast category labels">
+        <p className="text-[11px] text-[var(--tx2)] mb-4">Labels update across the entire app including Slack output, PDF exports, and AI prompts.</p>
+        <div className="flex flex-col gap-3">
+          {[
+            { key: 'worst_case', label: 'Worst Case' },
+            { key: 'call',       label: 'Call' },
+            { key: 'best_case',  label: 'Best Case' },
+            { key: 'pipeline',   label: 'Pipeline' },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex items-center gap-3">
+              <span className="text-[12px] text-[var(--tx2)] w-24 flex-shrink-0">{label}</span>
+              <input
+                className="flex-1 text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+                value={vocabDraft[key] || ''}
+                onChange={e => setVocabDraft(d => ({ ...d, [key]: e.target.value }))}
+                placeholder={DEFAULT_VOCAB[key]}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={handleVocabSave} className="btn btn-primary text-[11px]">
+            {vocabSaved ? 'Saved ✓' : 'Save labels'}
+          </button>
+          <button onClick={handleVocabReset} className="text-[11px] text-[var(--tx2)] hover:text-[var(--tx)] border-none bg-transparent cursor-pointer p-0">
+            Reset to defaults
+          </button>
+        </div>
       </Section>
       <Section title="Danger zone" danger>
         <Row label="Reset all data" sub="Clears all forecast inputs, import data, and settings.">
@@ -421,6 +469,8 @@ const CHANGELOG = [
       ['Forecast categories renamed', 'Commit → Worst Case, Probable → Call, Upside → Best Case; Pipeline unchanged — applied across store fields, localStorage keys, Supabase snapshots, Slack output, and all UI labels'],
       ['Legacy SFDC CSV import', 'Old "Commit", "Probable", "Upside" values from Salesforce exports continue to map correctly via normalizeFcCat()'],
       ['Supabase session migration', 'Prior sessions saved with old field names are auto-migrated on restore — no data loss'],
+      ['Vocabulary system', 'Category labels are now configurable in Settings → General. Changes propagate across all UI, Slack output, PDF exports, and AI prompts instantly — stored in moat-vocab (localStorage)'],
+      ['Inspector store key bumped', 'moat-inspector-v27 → moat-inspector-v3 to clear stale filter values stored as old display strings'],
     ],
   },
   {

@@ -1,10 +1,12 @@
 import React from 'react'
 import { useForecastStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt, pct, parseMoney } from '../../lib/fmt'
 import SectionComment from '../shared/SectionComment'
 
 export default function CncWhatIf() {
   const s = useForecastStore()
+  const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
   const cnc_pipe       = d.cnc_pipe       || 0
   const cnc_rev        = d.cnc_rev        || 0
@@ -82,13 +84,13 @@ export default function CncWhatIf() {
         <div className="px-4 py-3">
           <div className="text-[11px] text-[var(--tx2)] mb-0.5">C&amp;C prorated ({prorFactor}%)</div>
           <div className="text-[18px] font-[700] text-[var(--green)]">{fmt(cnc_prorated)}</div>
-          <div className="text-[11px] text-[var(--tx2)]">Prorated for weeks remaining — included in Worst Case FC</div>
+          <div className="text-[11px] text-[var(--tx2)]">Prorated for weeks remaining — included in {vocab.worst_case} FC</div>
         </div>
       </div>
 
       {/* Note */}
       <div className="px-4 py-2.5 bg-[var(--bg2)] border-t border-[var(--bdr2)] text-[11px] text-[var(--tx2)]">
-        Prorated C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> included in Worst Case forecast and above
+        Prorated C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> included in {vocab.worst_case} forecast and above
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 import React from 'react'
 import { createPortal } from 'react-dom'
 import { useForecastStore } from '../../store/forecastStore'
+import { useVocabStore } from '../../lib/vocab'
 import { fmt, attPct, getFiscalQuarterInfo } from '../../lib/fmt'
 
 /**
@@ -10,25 +11,26 @@ import { fmt, attPct, getFiscalQuarterInfo } from '../../lib/fmt'
  */
 export default function PdfRoot() {
   const s = useForecastStore()
+  const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
 
   const NAVY  = '#1a1a2e'
   const CORAL = '#E85D3A'
 
   const cards = [
-    { label: 'Worst Case forecast', value: d.fc_worst_case || 0, color: '#1a56db' },
-    { label: 'Call forecast',       value: d.fc_call       || 0, color: '#0d7c3d' },
-    { label: 'Best Case forecast',  value: d.fc_best_case  || 0, color: '#b45309' },
+    { label: `${vocab.worst_case} forecast`, value: d.fc_worst_case || 0, color: '#1a56db' },
+    { label: `${vocab.call} forecast`,       value: d.fc_call       || 0, color: '#0d7c3d' },
+    { label: `${vocab.best_case} forecast`,  value: d.fc_best_case  || 0, color: '#b45309' },
   ]
 
   const qInfo = getFiscalQuarterInfo('current', s.fyStartMonth || 1)
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 
   const ROWS = [
-    { label: 'Worst Case', pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expKey: 'bk_wc',   color: '#1a56db' },
-    { label: 'Call',       pipeKey: 'pipe_call',       rateKey: 'r_call',       expKey: 'bk_call', color: '#0d7c3d' },
-    { label: 'Best Case',  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expKey: 'bk_bc',   color: '#b45309' },
-    { label: 'Pipeline',   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expKey: 'bk_pp',   color: '#6b7280' },
+    { label: vocab.worst_case, pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expKey: 'bk_wc',   color: '#1a56db' },
+    { label: vocab.call,       pipeKey: 'pipe_call',       rateKey: 'r_call',       expKey: 'bk_call', color: '#0d7c3d' },
+    { label: vocab.best_case,  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expKey: 'bk_bc',   color: '#b45309' },
+    { label: vocab.pipeline,   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expKey: 'bk_pp',   color: '#6b7280' },
   ]
 
   const content = (
@@ -121,10 +123,10 @@ export default function PdfRoot() {
           </thead>
           <tbody>
             {[
-              { label: 'Closed',     keys: ['m1_closed','m2_closed','m3_closed'] },
-              { label: 'Worst Case', keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
-              { label: 'Call',       keys: ['m1_call','m2_call','m3_call'] },
-              { label: 'Best Case',  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
+              { label: vocab.closed,     keys: ['m1_closed','m2_closed','m3_closed'] },
+              { label: vocab.worst_case, keys: ['m1_worst_case','m2_worst_case','m3_worst_case'] },
+              { label: vocab.call,       keys: ['m1_call','m2_call','m3_call'] },
+              { label: vocab.best_case,  keys: ['m1_best_case','m2_best_case','m3_best_case'] },
             ].map(row => {
               const vals = row.keys.map(k => s[k] || 0)
               const total = vals.reduce((a, b) => a + b, 0)
