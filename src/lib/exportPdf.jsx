@@ -234,10 +234,11 @@ function forecastPages(s, d, qInfo, comments, todayStr) {
 
 function inspectionPages(repsSorted, repResults, qLabel, todayStr) {
   return (repsSorted || []).map((rep, repIdx) => {
-    const { owner, deals, stats } = rep
+    const [owner, deals] = Array.isArray(rep) ? rep : [rep.owner, rep.deals]
     const aiResult = repResults[owner]
-    const hygienePct = stats?.total > 0
-      ? Math.round(((stats.total - (stats.critical || 0) - (stats.warn || 0)) / stats.total) * 100)
+    const allFlags   = (deals || []).flatMap(d => d._flags || [])
+    const hygienePct = deals?.length > 0
+      ? Math.round(((deals.length - allFlags.filter(f => f.sev === 'critical').length - allFlags.filter(f => f.sev === 'warn').length) / deals.length) * 100)
       : 100
 
     return (
