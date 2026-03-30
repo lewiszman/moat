@@ -1,9 +1,11 @@
 import React from 'react'
-import { signInWithGoogle, signOut } from '../../lib/supabase'
+import { signInWithGoogle, signOut, SUPABASE_ENABLED } from '../../lib/supabase'
 import { useSessionStore } from '../../store/sessionStore'
 
 export default function AuthButton() {
   const user = useSessionStore(s => s.user)
+
+  if (!SUPABASE_ENABLED) return null
 
   if (user) {
     const avatar = user.user_metadata?.avatar_url
