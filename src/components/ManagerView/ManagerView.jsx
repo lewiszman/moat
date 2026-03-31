@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useForecastStore, useQuarterStore, useInspectorStore } from '../../store/forecastStore'
+import { calcRepForecast } from '../../lib/import'
 import { useVocabStore } from '../../lib/vocab'
 import ForecastCards from './ForecastCards'
 import QuarterlyInputs from './QuarterlyInputs'
@@ -32,14 +33,44 @@ function ImportModal({ onClose }) {
 }
 
 export default function ManagerView() {
-  const s              = useForecastStore()
-  const qs             = useQuarterStore()
-  const importedData   = useForecastStore(s => s.importedData)
-  const scopeSelected  = useForecastStore(s => s.scopeSelected)
+  const s                = useForecastStore()
+  const qs               = useQuarterStore()
+  const importedData     = useForecastStore(s => s.importedData)
+  const scopeSelected    = useForecastStore(s => s.scopeSelected)
+  const setScopeSelected = useForecastStore(s => s.setScopeSelected)
   const [importOpen, setImportOpen] = useState(false)
   const [shareOpen,  setShareOpen]  = useState(false)
 
-  const selectedAEs    = scopeSelected?.size > 0 ? [...scopeSelected].sort() : []
+  const selectedAEs = scopeSelected?.size > 0 ? [...scopeSelected].sort() : []
+
+  // Scoped forecast — aggregated from per-rep calcRepForecast when filter is active
+  const storeForCalc = {
+    r_worst_case:        s.r_worst_case,
+    r_call:              s.r_call,
+    r_best_case:         s.r_best_case,
+    r_pipe:              s.r_pipe,
+    callIncludesBestCase: s.callIncludesBestCase,
+    derived:             s.derived,
+  }
+  const scopedForecast = useMemo(() => {
+    if (!scopeSelected?.size || !importedData) return null
+    const results = [...scopeSelected].map(owner => calcRepForecast(owner, importedData, storeForCalc))
+    const sum = (key) => results.reduce((acc, r) => acc + (r[key] || 0), 0)
+    return {
+      fc_worst_case:   sum('fc_worst_case'),
+      fc_call:         sum('fc_call'),
+      fc_best_case:    sum('fc_best_case'),
+      closed:          sum('closed'),
+      bk_wc:           sum('bk_wc'),
+      bk_call:         sum('bk_call'),
+      bk_bc:           sum('bk_bc'),
+      cnc_prorated:    sum('cnc_rep'),
+      bk_bc_in_call:   s.callIncludesBestCase ? sum('bk_bc') * 0.5 : 0,
+      pipe_worst_case: sum('pipe_wc'),
+      pipe_call:       sum('pipe_call'),
+      pipe_best_case:  sum('pipe_bc'),
+    }
+  }, [scopeSelected, importedData, s.r_worst_case, s.r_call, s.r_best_case, s.r_pipe, s.callIncludesBestCase, s.derived]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handlePrint = () => {
     document.body.setAttribute('data-printing', 'forecast')
@@ -160,15 +191,20 @@ export default function ManagerView() {
         </div>
       </div>
 
-      <ForecastCards />
+      <ForecastCards override={scopedForecast} />
 
       {selectedAEs.length > 0 && (
-        <div className="mt-2 mb-1 text-[11px] text-[var(--tx2)]">
-          Showing rep view for{' '}
-          <span className="font-[600] text-[var(--tx)]">
-            {selectedAEs.length === 1 ? selectedAEs[0] : `${selectedAEs.length} AEs`}
-          </span>{' '}
-          below
+        <div className="mt-2 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[var(--blue)] font-[500]">
+            Filtered: {selectedAEs.length === 1
+              ? selectedAEs[0]
+              : `${selectedAEs[0]} +${selectedAEs.length - 1} more`}
+            <button
+              onClick={() => setScopeSelected(null)}
+              className="ml-0.5 text-[var(--blue)] opacity-60 hover:opacity-100 leading-none border-none bg-transparent cursor-pointer p-0 text-[12px]"
+              title="Clear filter"
+            >✕</button>
+          </span>
         </div>
       )}
 

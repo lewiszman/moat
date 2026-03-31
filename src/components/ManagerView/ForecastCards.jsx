@@ -166,12 +166,26 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
   )
 }
 
-export default function ForecastCards() {
+export default function ForecastCards({ override = null }) {
   const s = useForecastStore()
   const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
-  const { quota, closed } = s
-  const { bk_wc, bk_call, bk_bc, cnc_rev, cnc_prorated, fc_worst_case, fc_call, fc_best_case, bk_bc_in_call } = d
+  const { quota } = s
+
+  // When a filter override is active, use its values; otherwise fall back to derived store values
+  const eff           = override ?? d
+  const closed        = override?.closed        ?? s.closed
+  const bk_wc         = eff.bk_wc         ?? 0
+  const bk_call       = eff.bk_call       ?? 0
+  const bk_bc         = eff.bk_bc         ?? 0
+  const cnc_prorated  = eff.cnc_prorated  ?? d.cnc_prorated  ?? 0
+  const bk_bc_in_call = eff.bk_bc_in_call ?? d.bk_bc_in_call ?? 0
+  const fc_worst_case = eff.fc_worst_case ?? 0
+  const fc_call       = eff.fc_call       ?? 0
+  const fc_best_case  = eff.fc_best_case  ?? 0
+  const pipe_wc       = override?.pipe_worst_case ?? s.pipe_worst_case ?? 0
+  const pipe_call_val = override?.pipe_call       ?? s.pipe_call       ?? 0
+  const pipe_bc       = override?.pipe_best_case  ?? s.pipe_best_case  ?? 0
   const [expanded, setExpanded] = useState({})
 
   const toggleCard = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }))
@@ -239,7 +253,7 @@ export default function ForecastCards() {
       ],
       detailRows: [
         { l: 'Conversion rate',                      v: `${s.r_worst_case}%` },
-        { l: `Open ${vocab.worst_case} pipeline`,    v: fmt(s.pipe_worst_case) },
+        { l: `Open ${vocab.worst_case} pipeline`,    v: fmt(pipe_wc) },
         { l: 'Expected bookings',                    v: fmt(bk_wc) },
         { l: 'C&C prorated',                         v: fmt(cnc_prorated) },
       ],
@@ -254,7 +268,7 @@ export default function ForecastCards() {
       ],
       detailRows: [
         { l: 'Conversion rate',                      v: `${s.r_call}%` },
-        { l: `Open ${vocab.call} pipeline`,          v: fmt(s.pipe_call) },
+        { l: `Open ${vocab.call} pipeline`,          v: fmt(pipe_call_val) },
         { l: 'Expected bookings',                    v: fmt(bk_call) },
         ...(bk_bc_in_call > 0 ? [{ l: `+ ½ ${vocab.best_case} bookings`, v: fmt(bk_bc_in_call) }] : []),
       ],
@@ -269,7 +283,7 @@ export default function ForecastCards() {
       ],
       detailRows: [
         { l: 'Conversion rate',                      v: `${s.r_best_case}%` },
-        { l: `Open ${vocab.best_case} pipeline`,     v: fmt(s.pipe_best_case) },
+        { l: `Open ${vocab.best_case} pipeline`,     v: fmt(pipe_bc) },
         { l: 'Expected bookings',                    v: fmt(bk_bc) },
         ...(bk_bc_in_call > 0 ? [{ l: `(½ already in ${vocab.call})`, v: '' }] : []),
       ],
