@@ -165,16 +165,9 @@ function makeForecastStore(storeName, isNextQuarter = false) {
 
         clearImport: () => set(s => { s.importedData = null; s.importMeta = null; s.scopeSelected = null }),
 
-        setScopeSelected: (scope) => set(s => {
-          s.scopeSelected = scope
-          if (s.importedData) {
-            const records = scope
-              ? s.importedData.filter(d => scope.has(d.f_owner || 'Unknown'))
-              : s.importedData
-            const agg = aggregateForecast(records)
-            Object.assign(s, agg); s.closed = agg.closed; s.derived = computeDerived(s)
-          }
-        }),
+        // Sets the AE filter for the rep panel only.
+        // Team view always reflects full importedData — no pipeline re-aggregation.
+        setScopeSelected: (scope) => set(s => { s.scopeSelected = scope }),
 
         updateInput: (key, value) => set(s => { s[key] = value; s.derived = computeDerived(s) }),
       })),
@@ -269,6 +262,9 @@ export const useInspectorStore = create(
       lastResult: null,
       activeTab: 'reps',
       usageLog: [],
+      pendingAEFilter: null,
+      setPendingAEFilter: (owner) => set(s => { s.pendingAEFilter = owner }),
+      clearPendingAEFilter: () => set(s => { s.pendingAEFilter = null }),
 
       initApiKey: (userId) => {
         const lsKey = userId ? `moat_apikey_${userId}` : 'moat_apikey'

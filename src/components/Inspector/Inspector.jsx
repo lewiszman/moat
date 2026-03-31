@@ -649,6 +649,16 @@ export default function Inspector() {
   const [runError,      setRunError]      = React.useState(null)
   const [localRunning,  setLocalRunning]  = React.useState(false)
 
+  // Pick up pending AE filter set by RepPanel navigation
+  const pendingAEFilter    = useInspectorStore(s => s.pendingAEFilter)
+  const clearPendingAEFilter = useInspectorStore(s => s.clearPendingAEFilter)
+  React.useEffect(() => {
+    if (pendingAEFilter) {
+      setFilterAEs([pendingAEFilter])
+      clearPendingAEFilter()
+    }
+  }, [pendingAEFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Restore from persisted lastResult on mount (so navigating away and back doesn't clear results)
   React.useEffect(() => {
     const lr = insp.lastResult

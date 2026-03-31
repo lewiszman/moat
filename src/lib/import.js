@@ -92,6 +92,51 @@ export function aggregateForecast(records) {
   }
 }
 
+// ── Per-rep forecast calculation ──────────────────────────────
+// Uses team conversion rates applied to per-rep pipeline.
+// C&C is prorated by AE deal share (team-level input, not per-rep).
+export function calcRepForecast(ownerName, importedData, storeState) {
+  const active = importedData.filter(d =>
+    d.f_owner === ownerName && !['closed', 'omitted'].includes(d.f_fc_cat_norm)
+  )
+  const closedDeals = importedData.filter(d =>
+    d.f_owner === ownerName && d.f_fc_cat_norm === 'closed'
+  )
+
+  const closed = closedDeals.reduce((s, d) => s + d.f_amount_num, 0)
+  const bycat  = (cat) => active.filter(d => d.f_fc_cat_norm === cat).reduce((s, d) => s + d.f_amount_num, 0)
+
+  const pipe_wc   = bycat('worst_case')
+  const pipe_call = bycat('call')
+  const pipe_bc   = bycat('best_case')
+  const pipe_pipe = bycat('pipeline')
+
+  const { r_worst_case, r_call, r_best_case, r_pipe, callIncludesBestCase, derived } = storeState
+
+  const bk_wc   = pipe_wc   * ((r_worst_case || 0) / 100)
+  const bk_call = pipe_call * ((r_call       || 0) / 100)
+  const bk_bc   = pipe_bc   * ((r_best_case  || 0) / 100)
+  const bk_pp   = pipe_pipe * ((r_pipe       || 0) / 100)
+
+  const totalActive = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm)).length
+  const aeShare  = totalActive > 0 ? active.length / totalActive : 0
+  const cnc_rep  = (derived?.cnc_prorated || 0) * aeShare
+
+  const bk_bc_in_call = callIncludesBestCase ? bk_bc * 0.5 : 0
+
+  const fc_worst_case = closed + cnc_rep + bk_wc
+  const fc_call       = fc_worst_case + bk_call + bk_bc_in_call
+  const fc_best_case  = fc_call + (bk_bc - bk_bc_in_call)
+
+  return {
+    closed, pipe_wc, pipe_call, pipe_bc, pipe_pipe,
+    bk_wc, bk_call, bk_bc, bk_pp, cnc_rep,
+    fc_worst_case, fc_call, fc_best_case,
+    dealCount:     active.length,
+    totalPipeline: pipe_wc + pipe_call + pipe_bc + pipe_pipe,
+  }
+}
+
 // Monthly closed breakdown from import — respects fiscal year start month
 export function calcMonthlyClosedBreakdown(records, fyStartMonth = 1) {
   const closed = records.filter(r => r.f_fc_cat_norm === 'closed')

@@ -11,6 +11,8 @@ import SectionComment from '../shared/SectionComment'
 import ImportWizard from '../shared/ImportWizard'
 import ShareModal from '../shared/ShareModal'
 import PdfRoot from './PdfRoot'
+import AEFilter from './AEFilter'
+import RepPanel from './RepPanel'
 
 function ImportModal({ onClose }) {
   return (
@@ -30,10 +32,14 @@ function ImportModal({ onClose }) {
 }
 
 export default function ManagerView() {
-  const s  = useForecastStore()
-  const qs = useQuarterStore()
+  const s              = useForecastStore()
+  const qs             = useQuarterStore()
+  const importedData   = useForecastStore(s => s.importedData)
+  const scopeSelected  = useForecastStore(s => s.scopeSelected)
   const [importOpen, setImportOpen] = useState(false)
   const [shareOpen,  setShareOpen]  = useState(false)
+
+  const selectedAEs    = scopeSelected?.size > 0 ? [...scopeSelected].sort() : []
 
   const handlePrint = () => {
     document.body.setAttribute('data-printing', 'forecast')
@@ -101,6 +107,9 @@ export default function ManagerView() {
         />
 
         <div className="ml-auto flex items-center gap-2">
+          {/* AE filter */}
+          <AEFilter />
+
           {/* Share */}
           <button
             onClick={() => setShareOpen(true)}
@@ -153,6 +162,16 @@ export default function ManagerView() {
 
       <ForecastCards />
 
+      {selectedAEs.length > 0 && (
+        <div className="mt-2 mb-1 text-[11px] text-[var(--tx2)]">
+          Showing rep view for{' '}
+          <span className="font-[600] text-[var(--tx)]">
+            {selectedAEs.length === 1 ? selectedAEs[0] : `${selectedAEs.length} AEs`}
+          </span>{' '}
+          below
+        </div>
+      )}
+
       <div className="sec-hd mt-6">
         Quarterly inputs
         <SectionComment sectionKey="qi" placeholder="e.g. Q3 FY26 — team at 70% of quota pace, 2 AEs ramping" />
@@ -197,6 +216,10 @@ export default function ManagerView() {
         <SectionComment sectionKey="wow" placeholder="e.g. W6 commit slipped $200K — two deals pushed to Q+1" />
       </div>
       <WowTracker />
+
+      {selectedAEs.length > 0 && (
+        <RepPanel selectedAEs={selectedAEs} importedData={importedData} />
+      )}
 
       {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
       {shareOpen  && <ShareModal  onClose={() => setShareOpen(false)} />}
