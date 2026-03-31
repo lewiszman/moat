@@ -142,28 +142,42 @@ function makeForecastStore(storeName, isNextQuarter = false) {
           s.derived = computeDerived(s)
         }),
 
-        setImportData: (records, meta) => set(s => {
-          // Save snapshot of current import for slippage detection on next import
-          if (s.importedData?.length) {
-            const snap = {}
-            s.importedData.forEach(d => {
-              const key = (d.f_opp_name || '').toLowerCase()
-              if (key) snap[key] = { closeDate: d.f_close_date || null, stage: d.f_stage || null }
-            })
-            s.previousImportSnapshot = snap
+        setImportData: (records, meta) => {
+          set(s => {
+            // Save snapshot of current import for slippage detection on next import
+            if (s.importedData?.length) {
+              const snap = {}
+              s.importedData.forEach(d => {
+                const key = (d.f_opp_name || '').toLowerCase()
+                if (key) snap[key] = { closeDate: d.f_close_date || null, stage: d.f_stage || null }
+              })
+              s.previousImportSnapshot = snap
+            }
+            s.importedData = records; s.importMeta = meta; s.scopeSelected = null
+            const agg     = aggregateForecast(records)
+            const monthly = calcMonthlyClosedBreakdown(records, s.fyStartMonth || 1)
+            Object.assign(s, agg)
+            s.m1_closed = monthly[0] || 0
+            s.m2_closed = monthly[1] || 0
+            s.m3_closed = monthly[2] || 0
+            s.closed    = agg.closed
+            s.derived   = computeDerived(s)
+          })
+          // Persist import data to dedicated keys (kept separate from main
+          // forecast state to avoid hitting the ~5 MB localStorage limit)
+          try {
+            localStorage.setItem(`${storeName}-import`, JSON.stringify(records))
+            localStorage.setItem(`${storeName}-import-meta`, JSON.stringify(meta))
+          } catch (e) {
+            console.warn('[store] Failed to persist import data:', e)
           }
-          s.importedData = records; s.importMeta = meta; s.scopeSelected = null
-          const agg     = aggregateForecast(records)
-          const monthly = calcMonthlyClosedBreakdown(records, s.fyStartMonth || 1)
-          Object.assign(s, agg)
-          s.m1_closed = monthly[0] || 0
-          s.m2_closed = monthly[1] || 0
-          s.m3_closed = monthly[2] || 0
-          s.closed    = agg.closed
-          s.derived   = computeDerived(s)
-        }),
+        },
 
-        clearImport: () => set(s => { s.importedData = null; s.importMeta = null; s.scopeSelected = null }),
+        clearImport: () => {
+          set(s => { s.importedData = null; s.importMeta = null; s.scopeSelected = null })
+          localStorage.removeItem(`${storeName}-import`)
+          localStorage.removeItem(`${storeName}-import-meta`)
+        },
 
         // Sets the AE filter for the rep panel only.
         // Team view always reflects full importedData — no pipeline re-aggregation.
@@ -195,6 +209,21 @@ function makeForecastStore(storeName, isNextQuarter = false) {
               state.quarterLabel = info.label
             }
             state.derived = computeDerived(state)
+            // Restore import data from its dedicated localStorage keys.
+            // Pipeline inputs are already in the main partialize so we only
+            // need the raw records (for Inspector) and meta (for the import UI).
+            try {
+              const rawData = localStorage.getItem(`${storeName}-import`)
+              const rawMeta = localStorage.getItem(`${storeName}-import-meta`)
+              if (rawData) {
+                state.importedData = JSON.parse(rawData)
+                state.importMeta   = rawMeta ? JSON.parse(rawMeta) : null
+              }
+            } catch (e) {
+              console.warn('[store] Failed to restore import data:', e)
+              state.importedData = null
+              state.importMeta   = null
+            }
           }
         },
       }
