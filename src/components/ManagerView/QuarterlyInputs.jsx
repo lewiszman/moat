@@ -3,6 +3,7 @@ import { useForecastStore } from '../../store/forecastStore'
 import { useVocabStore } from '../../lib/vocab'
 import { fmt, parseMoney } from '../../lib/fmt'
 import SectionComment from '../shared/SectionComment'
+import Tooltip from '../shared/Tooltip'
 
 function NumInput({ id, value, onChange, prefix, width = 'w-36', size = 'text-xl' }) {
   const [raw, setRaw] = React.useState(null)
@@ -27,11 +28,32 @@ function NumInput({ id, value, onChange, prefix, width = 'w-36', size = 'text-xl
   )
 }
 
-function PipelineRow({ label, pipeKey, rateKey, expId, pill, pillColor }) {
+const CAT_DEFS = {
+  worst_case: {
+    prob: '95% probability',
+    body: 'Opportunities with very high likelihood of closing. Strong champions, confirmed budgets, clear decision processes, strong competitive positioning, and excellent solution fit.',
+  },
+  call: {
+    prob: '>75% probability',
+    body: 'Opportunities with good likelihood of closing but minor risks or uncertainties. Established champions, identified budgets, understood decision processes, favorable competitive positioning, and good solution fit.',
+  },
+  best_case: {
+    prob: '>50% probability',
+    body: 'Opportunities with potential but significant uncertainties. May have weak champions, uncertain budgets, unclear decision processes, challenging competitive positions, or questionable solution fit.',
+  },
+  pipeline: {
+    prob: '<50% probability',
+    body: 'Very low likelihood of closing this period. Typically deals with multiple critical risk factors, minimal buying signals, or early-stage with little qualification completed.',
+  },
+}
+
+function PipelineRow({ label, pipeKey, rateKey, expId, pill, pillColor, catKey }) {
   const s = useForecastStore()
   const pipeVal = s[pipeKey] || 0
   const rateVal = s[rateKey] || 0
   const expected = s.derived?.[expId] || 0
+
+  const def = CAT_DEFS[catKey]
 
   return (
     <div className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-2.5 border-b border-[var(--bdr2)] last:border-0">
@@ -43,6 +65,11 @@ function PipelineRow({ label, pipeKey, rateKey, expId, pill, pillColor }) {
         >
           {pill}
         </span>
+        {def && (
+          <Tooltip title={`${label} — ${def.prob}`} body={def.body}>
+            <span className="text-[var(--tx2)] opacity-60 hover:opacity-100 cursor-help text-[13px] leading-none select-none">ⓘ</span>
+          </Tooltip>
+        )}
       </div>
       <NumInput
         value={pipeVal}
@@ -72,10 +99,10 @@ export default function QuarterlyInputs() {
   const d = s.derived || {}
 
   const ROWS = [
-    { label: vocab.worst_case, pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expId: 'bk_wc',   pill: vocab.worst_case.toLowerCase(), pillColor: '#1a56db' },
-    { label: vocab.call,       pipeKey: 'pipe_call',       rateKey: 'r_call',       expId: 'bk_call', pill: vocab.call.toLowerCase(),       pillColor: '#0d7c3d' },
-    { label: vocab.best_case,  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expId: 'bk_bc',   pill: vocab.best_case.toLowerCase(),  pillColor: '#b45309' },
-    { label: vocab.pipeline,   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expId: 'bk_pp',   pill: vocab.pipeline.toLowerCase(),   pillColor: '#6b7280' },
+    { catKey: 'worst_case', label: vocab.worst_case, pipeKey: 'pipe_worst_case', rateKey: 'r_worst_case', expId: 'bk_wc',   pill: vocab.worst_case.toLowerCase(), pillColor: '#1a56db' },
+    { catKey: 'call',       label: vocab.call,       pipeKey: 'pipe_call',       rateKey: 'r_call',       expId: 'bk_call', pill: vocab.call.toLowerCase(),       pillColor: '#0d7c3d' },
+    { catKey: 'best_case',  label: vocab.best_case,  pipeKey: 'pipe_best_case',  rateKey: 'r_best_case',  expId: 'bk_bc',   pill: vocab.best_case.toLowerCase(),  pillColor: '#b45309' },
+    { catKey: 'pipeline',   label: vocab.pipeline,   pipeKey: 'pipe_pipe',       rateKey: 'r_pipe',       expId: 'bk_pp',   pill: vocab.pipeline.toLowerCase(),   pillColor: '#6b7280' },
   ]
 
   return (
