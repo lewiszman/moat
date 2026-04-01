@@ -14,6 +14,7 @@ import ShareModal from '../shared/ShareModal'
 import PdfRoot from './PdfRoot'
 import AEFilter from './AEFilter'
 import RepPanel from './RepPanel'
+import UnmappedBanner from '../shared/UnmappedBanner'
 
 function ImportModal({ onClose }) {
   return (
@@ -190,6 +191,8 @@ export default function ManagerView() {
           </button>
         </div>
       </div>
+
+      <UnmappedBanner />
 
       <ForecastCards override={scopedForecast} />
 

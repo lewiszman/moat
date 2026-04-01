@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import { useForecastStore, useDealBackStore, useQuarterStore } from '../../store/forecastStore'
 import { useVocabStore } from '../../lib/vocab'
+import UnmappedBanner from '../shared/UnmappedBanner'
 import { fmt } from '../../lib/fmt'
 
 const COLS_BASE = [
@@ -382,6 +383,9 @@ export default function DealBacking() {
         </div>
         <button onClick={reset} className="btn text-[11px]">Reset</button>
       </div>
+
+      {/* Unmapped category banner */}
+      <UnmappedBanner />
 
       {/* Kanban board */}
       <div className="grid grid-cols-4 gap-3" style={{ minHeight: '400px' }}>

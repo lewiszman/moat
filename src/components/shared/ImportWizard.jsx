@@ -1,7 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useMemo } from 'react'
 import Papa from 'papaparse'
 import { useForecastStore } from '../../store/forecastStore'
-import { getVocab } from '../../lib/vocab'
+import { getVocab, useCatMapStore } from '../../lib/vocab'
 import { normalizeRecords } from '../../lib/import'
 
 const FIELD_DEFS = [
@@ -48,14 +48,34 @@ function autoDetectMap(headers) {
 
 export default function ImportWizard({ onClose }) {
   const setImportData = useForecastStore(s => s.setImportData)
-  const clearImport = useForecastStore(s => s.clearImport)
-  const importMeta = useForecastStore(s => s.importMeta)
+  const clearImport   = useForecastStore(s => s.clearImport)
+  const importMeta    = useForecastStore(s => s.importMeta)
+  const catMap        = useCatMapStore(s => s.catMap)
+  const setCatMap     = useCatMapStore(s => s.setCatMap)
 
-  const [step, setStep] = useState(0) // 0=drop, 1=map, 2=preview
-  const [parsed, setParsed] = useState(null)
-  const [colMap, setColMap] = useState({})
-  const [isDragging, setIsDragging] = useState(false)
+  const [step,            setStep]            = useState(0) // 0=drop, 1=map, 2=preview
+  const [parsed,          setParsed]          = useState(null)
+  const [colMap,          setColMap]          = useState({})
+  const [isDragging,      setIsDragging]      = useState(false)
+  const [importOverrides, setImportOverrides] = useState({}) // { rawVal: internalKey }
+  const [saveOverrides,   setSaveOverrides]   = useState({}) // { rawVal: true }
   const fileRef = useRef(null)
+
+  // Compute normalized records + unmapped detection for step 2
+  const step2Data = useMemo(() => {
+    if (step !== 2 || !parsed) return null
+    const headerToField = Object.fromEntries(Object.entries(colMap).filter(([, f]) => f))
+    const all = normalizeRecords(parsed.rows, headerToField, catMap)
+    const unmappedMap = new Map()
+    all.forEach(r => {
+      if (r._unmapped) unmappedMap.set(r._rawFcCat, (unmappedMap.get(r._rawFcCat) || 0) + 1)
+    })
+    return {
+      all,
+      preview:  all.slice(0, 8),
+      unmapped: [...unmappedMap.entries()], // [[rawVal, count], ...]
+    }
+  }, [step, parsed, colMap, catMap])
 
   const processFile = useCallback((file) => {
     if (!file) return
@@ -63,11 +83,13 @@ export default function ImportWizard({ onClose }) {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const headers = results.meta.fields || []
-        const rows    = results.data
+        const headers  = results.meta.fields || []
+        const rows     = results.data
         const detected = autoDetectMap(headers)
         setParsed({ filename: file.name, headers, rows })
         setColMap(detected)
+        setImportOverrides({})
+        setSaveOverrides({})
         setStep(1)
       },
     })
@@ -78,14 +100,36 @@ export default function ImportWizard({ onClose }) {
     processFile(e.dataTransfer.files[0])
   }
 
-  const handleImport = () => {
-    if (!parsed) return
-    // Build a header→field map from colMap
-    const headerToField = {}
-    Object.entries(colMap).forEach(([header, field]) => {
-      if (field) headerToField[header] = field
+  // Build catMap augmented with per-import overrides (not persisted unless saveOverrides checked)
+  const buildAugmentedCatMap = (overrides) => {
+    const aug = {}
+    Object.entries(catMap).forEach(([k, vs]) => { aug[k] = [...vs] })
+    Object.entries(overrides).forEach(([rawVal, internalKey]) => {
+      if (!aug[internalKey]) aug[internalKey] = []
+      const lower = rawVal.toLowerCase()
+      if (!aug[internalKey].some(v => v.toLowerCase() === lower)) aug[internalKey].push(rawVal)
     })
-    const records = normalizeRecords(parsed.rows, headerToField)
+    return aug
+  }
+
+  const handleImport = (useOverrides = false) => {
+    if (!parsed) return
+    const headerToField  = Object.fromEntries(Object.entries(colMap).filter(([, f]) => f))
+    const effectiveCatMap = useOverrides ? buildAugmentedCatMap(importOverrides) : catMap
+    const records        = normalizeRecords(parsed.rows, headerToField, effectiveCatMap)
+
+    // Persist any checked "Save this mapping" overrides to catMapStore
+    if (useOverrides) {
+      Object.entries(importOverrides).forEach(([rawVal, internalKey]) => {
+        if (!saveOverrides[rawVal]) return
+        const current = catMap[internalKey] || []
+        const lower   = rawVal.toLowerCase()
+        if (!current.some(v => v.toLowerCase() === lower)) {
+          setCatMap(internalKey, [...current, rawVal])
+        }
+      })
+    }
+
     setImportData(records, { filename: parsed.filename, count: records.length, date: new Date().toISOString() })
     onClose?.()
   }
@@ -124,7 +168,6 @@ export default function ImportWizard({ onClose }) {
       <p className="text-[12px] text-[var(--tx2)] mb-4">{parsed.filename} · {parsed.rows.length} rows · Fields marked * are required</p>
       <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
         {FIELD_DEFS.map(field => {
-          // Find the header currently mapped to this field
           const mappedHeader = Object.entries(colMap).find(([, v]) => v === field.key)?.[0] || ''
           return (
             <div key={field.key} className="flex items-center gap-3">
@@ -137,7 +180,6 @@ export default function ImportWizard({ onClose }) {
                   const header = e.target.value
                   setColMap(prev => {
                     const next = { ...prev }
-                    // Remove old mapping for this field
                     Object.keys(next).forEach(k => { if (next[k] === field.key) delete next[k] })
                     if (header) next[header] = field.key
                     return next
@@ -161,13 +203,24 @@ export default function ImportWizard({ onClose }) {
 
   // ── Step 2: Preview ──
   if (step === 2) {
-    const headerToField = {}
-    Object.entries(colMap).forEach(([h, f]) => { if (f) headerToField[h] = f })
-    const preview = normalizeRecords(parsed.rows.slice(0, 8), headerToField)
+    const vocab      = getVocab()
+    const { preview, unmapped } = step2Data || { preview: [], unmapped: [] }
+    const hasUnmapped = unmapped.length > 0
+
+    const CAT_OPTIONS = [
+      { value: 'worst_case', label: vocab.worst_case || 'Worst Case' },
+      { value: 'call',       label: vocab.call       || 'Call'       },
+      { value: 'best_case',  label: vocab.best_case  || 'Best Case'  },
+      { value: 'pipeline',   label: vocab.pipeline   || 'Pipeline'   },
+      { value: 'closed',     label: 'Closed Won' },
+      { value: 'omitted',    label: 'Omitted'    },
+    ]
+
     return (
       <div className="p-6">
         <h3 className="text-[14px] font-[700] text-[var(--tx)] mb-1">Preview</h3>
         <p className="text-[12px] text-[var(--tx2)] mb-3">Showing first 8 rows of {parsed.rows.length}</p>
+
         <div className="overflow-x-auto rounded-lg border border-[var(--bdr2)] mb-4">
           <table className="text-[11px] w-full border-collapse">
             <thead className="bg-[var(--bg2)]">
@@ -186,8 +239,9 @@ export default function ImportWizard({ onClose }) {
                   <td className="px-2 py-2 whitespace-nowrap">{row.f_close_date || '—'}</td>
                   <td className="px-2 py-2 max-w-[100px] truncate">{row.f_stage || '—'}</td>
                   <td className="px-2 py-2">
-                    <span className="text-[9px] font-[700] uppercase px-1.5 py-0.5 rounded-full bg-[var(--bg2)] border border-[var(--bdr2)]">
-                      {getVocab()[row.f_fc_cat_norm] ?? row.f_fc_cat_norm ?? '—'}
+                    <span className={`text-[9px] font-[700] uppercase px-1.5 py-0.5 rounded-full border ${row._unmapped ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-[var(--bg2)] border-[var(--bdr2)]'}`}>
+                      {vocab[row.f_fc_cat_norm] ?? row.f_fc_cat_norm ?? '—'}
+                      {row._unmapped && ' ⚠'}
                     </span>
                   </td>
                 </tr>
@@ -195,11 +249,75 @@ export default function ImportWizard({ onClose }) {
             </tbody>
           </table>
         </div>
+
+        {/* Unmapped category warning */}
+        {hasUnmapped && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center gap-2 border-b border-amber-200 bg-amber-100">
+              <span className="text-[12px] font-[700] text-amber-800">
+                ⚠️ {unmapped.length} unrecognized forecast category value{unmapped.length !== 1 ? 's' : ''} detected
+              </span>
+              <span className="text-[11px] text-amber-700 ml-auto">These will default to Pipeline unless mapped below</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="text-[11px] w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-amber-200">
+                    <th className="px-3 py-2 text-left font-[700] uppercase tracking-wider text-amber-700 text-[10px]">Raw value</th>
+                    <th className="px-3 py-2 text-left font-[700] uppercase tracking-wider text-amber-700 text-[10px]">Deals</th>
+                    <th className="px-3 py-2 text-left font-[700] uppercase tracking-wider text-amber-700 text-[10px]">Map to</th>
+                    <th className="px-3 py-2 text-left font-[700] uppercase tracking-wider text-amber-700 text-[10px]">Save</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unmapped.map(([rawVal, count]) => (
+                    <tr key={rawVal} className="border-b border-amber-100 last:border-0">
+                      <td className="px-3 py-2 font-[600] text-amber-900">{rawVal || '(blank)'}</td>
+                      <td className="px-3 py-2 text-amber-700">{count}</td>
+                      <td className="px-3 py-2">
+                        <select
+                          value={importOverrides[rawVal] ?? 'pipeline'}
+                          onChange={e => setImportOverrides(prev => ({ ...prev, [rawVal]: e.target.value }))}
+                          className="text-[11px] border border-amber-300 rounded px-1.5 py-1 bg-white text-amber-900 outline-none focus:border-amber-500"
+                        >
+                          {CAT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <label className="flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!saveOverrides[rawVal]}
+                            onChange={e => setSaveOverrides(prev => ({ ...prev, [rawVal]: e.target.checked }))}
+                            className="accent-amber-600"
+                          />
+                          <span className="text-amber-700">Save mapping</span>
+                        </label>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2 pt-4 border-t border-[var(--bdr2)]">
           <button onClick={() => setStep(1)} className="btn">Back</button>
-          <button onClick={handleImport} className="btn btn-primary ml-auto">
-            Import {parsed.rows.length} deals
-          </button>
+          {hasUnmapped ? (
+            <>
+              <button onClick={() => handleImport(false)} className="btn ml-auto">
+                Import anyway
+              </button>
+              <button onClick={() => handleImport(true)} className="btn btn-primary">
+                Fix and import
+              </button>
+            </>
+          ) : (
+            <button onClick={() => handleImport(false)} className="btn btn-primary ml-auto">
+              Import {parsed.rows.length} deals
+            </button>
+          )}
         </div>
       </div>
     )

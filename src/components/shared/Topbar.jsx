@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useDarkMode } from '../../hooks/useDarkMode'
@@ -25,6 +25,9 @@ export default function Topbar() {
   const [promptOpen, setPromptOpen]   = useState(false)
   const [snapLabel, setSnapLabel]     = useState('')
   const [pdfLoading, setPdfLoading]   = useState(false)
+  const [nudgeDismissed, setNudgeDismissed] = useState(
+    () => !!sessionStorage.getItem('moat-nudge-dismissed')
+  )
 
   const handleDownloadPdf = async () => {
     setPdfLoading(true)
@@ -43,6 +46,11 @@ export default function Topbar() {
     await saveSnapshot(snapLabel.trim() || null)
     setSnapLabel('')
     setPromptOpen(false)
+  }
+
+  const dismissNudge = () => {
+    sessionStorage.setItem('moat-nudge-dismissed', '1')
+    setNudgeDismissed(true)
   }
 
   return (
@@ -89,6 +97,18 @@ export default function Topbar() {
         >
           {dark ? 'Light mode' : 'Dark mode'}
         </button>
+
+        {/* Sign-in nudge — unauthenticated only, dismissible for the session */}
+        {!user && !nudgeDismissed && (
+          <span className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-[var(--blue)]">
+            Sign in to save sessions across devices
+            <button
+              onClick={dismissNudge}
+              className="ml-0.5 opacity-60 hover:opacity-100 leading-none border-none bg-transparent cursor-pointer p-0 text-[12px] text-[var(--blue)]"
+              title="Dismiss"
+            >✕</button>
+          </span>
+        )}
 
         {/* Supabase auth — only shown when credentials are configured */}
         <AuthButton />

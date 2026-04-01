@@ -65,9 +65,21 @@ export function extractSnapshot(state) {
 
 // Auto-save: upsert the single rolling auto-save per user + quarter.
 // Avoids unbounded DB growth — one row per quarter gets refreshed.
+// Also prunes auto-saves older than 90 days.
 export async function autoSaveSession(userId, quarterLabel, snapshot) {
   if (!supabase) return
   const safe = sanitizeSnapshot(snapshot)
+
+  // Prune stale auto-saves (>90 days) in the background — non-blocking
+  const cutoff = new Date(Date.now() - 90 * 24 * 3600 * 1000).toISOString()
+  supabase
+    .from('sessions')
+    .delete()
+    .eq('user_id', userId)
+    .eq('is_auto', true)
+    .lt('updated_at', cutoff)
+    .then(() => {})
+
   const { data: existing } = await supabase
     .from('sessions')
     .select('id')

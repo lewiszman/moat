@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react'
-import { useForecastStore } from '../store/forecastStore'
+import { useForecastStore, useWowStore, useDealBackStore, useSectionComments } from '../store/forecastStore'
 import { useSessionStore } from '../store/sessionStore'
-import { autoSaveSession, extractSnapshot } from '../lib/supabase'
+import { autoSaveSession } from '../lib/supabase'
+import { buildSnapshot } from '../lib/snapshot'
 
 const DEBOUNCE_MS = 3000
 
-// Subscribes to forecast store changes and auto-saves to Supabase
+// Subscribes to all persistent stores and auto-saves a full snapshot to Supabase
 // when the user is signed in. Debounced to avoid excessive writes.
 export function useAutoSave() {
   const user     = useSessionStore(s => s.user)
@@ -14,18 +15,23 @@ export function useAutoSave() {
   useEffect(() => {
     if (!user) return
 
-    const unsub = useForecastStore.subscribe((state) => {
+    const debouncedSave = () => {
       clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => {
-        const snapshot     = extractSnapshot(state)
-        const quarterLabel = state.quarterLabel || 'Unknown'
+        const snapshot     = buildSnapshot()
+        const quarterLabel = useForecastStore.getState().quarterLabel || 'Unknown'
         autoSaveSession(user.id, quarterLabel, snapshot)
           .then(() => useSessionStore.getState().loadSessions())
       }, DEBOUNCE_MS)
-    })
+    }
+
+    const unsubFc  = useForecastStore.subscribe(debouncedSave)
+    const unsubWow = useWowStore.subscribe(debouncedSave)
+    const unsubDb  = useDealBackStore.subscribe(debouncedSave)
+    const unsubSc  = useSectionComments.subscribe(debouncedSave)
 
     return () => {
-      unsub()
+      unsubFc(); unsubWow(); unsubDb(); unsubSc()
       clearTimeout(timerRef.current)
     }
   }, [user])

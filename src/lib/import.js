@@ -1,5 +1,6 @@
 // ── CSV field normalisation ────────────────────────────────────
 import { getFiscalQuarterInfo } from './fmt'
+import { DEFAULT_CAT_MAP } from './vocab'
 
 const DEFAULT_COL_MAP = {
   'Opportunity Name':         'f_opp_name',
@@ -20,33 +21,35 @@ const DEFAULT_COL_MAP = {
   'Champion':                 'f_champion',
 }
 
-const DEFAULT_CAT_MAP = {
-  'Closed Won':  'closed',
-  'Worst Case':  'worst_case',
-  'Commit':      'worst_case',   // legacy SFDC
-  'Commit ':     'worst_case',   // legacy SFDC with trailing space
-  'Call':        'call',
-  'Probable':    'call',         // legacy SFDC
-  'Best Case':   'best_case',
-  'Upside':      'best_case',    // legacy SFDC
-  'Pipeline':    'pipeline',
-  'Omitted':     'omitted',
-}
-
+// normalizeFcCat — resolves a raw CSV forecast category value to an internal key.
+// catMap format: { worst_case: string[], call: string[], ... }
+// Returns: { key: string, unmapped: boolean, rawValue?: string }
 export function normalizeFcCat(raw, catMap = DEFAULT_CAT_MAP) {
-  if (!raw) return 'pipeline'
+  if (!raw) return { key: 'pipeline', unmapped: false }
   const trimmed = raw.trim()
-  if (catMap[trimmed]) return catMap[trimmed]
-  const lower = trimmed.toLowerCase()
-  if (lower.includes('closed') || lower.includes('won')) return 'closed'
-  if (lower.includes('worst'))    return 'worst_case'
-  if (lower.includes('commit'))   return 'worst_case'   // legacy
-  if (lower.includes('best'))     return 'best_case'
-  if (lower.includes('call'))     return 'call'
-  if (lower.includes('probable')) return 'call'         // legacy
-  if (lower.includes('upside'))   return 'best_case'    // legacy
-  if (lower.includes('omit'))     return 'omitted'
-  return 'pipeline'
+  const lower   = trimmed.toLowerCase()
+
+  // 1. Exact match (case-insensitive) against user catMap
+  if (catMap) {
+    for (const [internalKey, values] of Object.entries(catMap)) {
+      if (Array.isArray(values) && values.some(v => v.trim().toLowerCase() === lower)) {
+        return { key: internalKey, unmapped: false }
+      }
+    }
+  }
+
+  // 2. Fuzzy fallback — covers common SFDC variants not in catMap
+  if (lower.includes('closed') || lower.includes('won')) return { key: 'closed',     unmapped: false }
+  if (lower.includes('worst'))    return { key: 'worst_case', unmapped: false }
+  if (lower.includes('commit'))   return { key: 'worst_case', unmapped: false }
+  if (lower.includes('best'))     return { key: 'best_case',  unmapped: false }
+  if (lower.includes('call'))     return { key: 'call',       unmapped: false }
+  if (lower.includes('probable')) return { key: 'call',       unmapped: false }
+  if (lower.includes('upside'))   return { key: 'best_case',  unmapped: false }
+  if (lower.includes('omit'))     return { key: 'omitted',    unmapped: false }
+
+  // 3. No match — default to pipeline, flag as unmapped
+  return { key: 'pipeline', unmapped: true, rawValue: trimmed }
 }
 
 export function parseAmount(s) {
@@ -68,7 +71,10 @@ export function normalizeRecords(rows, colMap = DEFAULT_COL_MAP, catMap = DEFAUL
     })
     // Normalize derived fields
     d.f_amount_num = parseAmount(d.f_amount || 0)
-    d.f_fc_cat_norm = normalizeFcCat(d.f_fc_cat, catMap)
+    const catResult  = normalizeFcCat(d.f_fc_cat, catMap)
+    d.f_fc_cat_norm  = catResult.key
+    d._rawFcCat      = (d.f_fc_cat || '').trim()
+    d._unmapped      = catResult.unmapped || false
     return d
   }).filter(d => d.f_opp_name || d.f_account)
 }

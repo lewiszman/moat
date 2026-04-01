@@ -5,6 +5,7 @@ import { flagDeal, groupByRep, dealWeight, FLAG_DEF_LIST } from '../../lib/flags
 import { fetchAISummary, fetchManagerInsights, findDealAction, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { formatSlackMessage } from '../../lib/slackFormatter'
 import { getVocab, useVocabStore } from '../../lib/vocab'
+import UnmappedBanner from '../shared/UnmappedBanner'
 import { fmt } from '../../lib/fmt'
 
 const CAT_ORDER  = ['worst_case', 'call', 'best_case', 'pipeline']
@@ -648,6 +649,7 @@ export default function Inspector() {
   const slackRef = useRef(null)
   const [runError,      setRunError]      = React.useState(null)
   const [localRunning,  setLocalRunning]  = React.useState(false)
+  const [lastRunDate,   setLastRunDate]   = React.useState(null)
 
   // Pick up pending AE filter set by RepPanel navigation
   const pendingAEFilter    = useInspectorStore(s => s.pendingAEFilter)
@@ -659,35 +661,56 @@ export default function Inspector() {
     }
   }, [pendingAEFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Restore from persisted lastResult on mount (so navigating away and back doesn't clear results)
+  // Restore last run from localStorage with 7-day TTL
   React.useEffect(() => {
-    const lr = insp.lastResult
-    if (!lr?.active?.length || allDeals.length > 0) return
-    const byRep = {}
-    lr.active.forEach(d => {
-      const o = d._owner || 'Unknown'
-      if (!byRep[o]) byRep[o] = []
-      byRep[o].push(d)
-    })
-    const sorted = Object.entries(byRep).sort(([, a], [, b]) =>
-      b.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0) -
-      a.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0)
-    )
-    setAllDeals(lr.active)
-    setRepsSorted(sorted)
-    const allFlags  = lr.active.flatMap(d => d._flags || [])
-    const aesWithCrit = sorted.filter(([, deals]) =>
-      deals.flatMap(d => d._flags || []).some(f => f.sev === 'critical')
-    ).length
-    setStats({
-      aes: sorted.length,
-      deals: lr.active.length,
-      pipe: lr.active.reduce((s, d) => s + d.f_amount_num, 0),
-      crit: allFlags.filter(f => f.sev === 'critical').length,
-      warn: allFlags.filter(f => f.sev === 'warn').length,
-      aesWithCrit,
-    })
+    if (allDeals.length > 0) return
+    try {
+      const raw = localStorage.getItem('moat-inspector-last-run')
+      if (!raw) return
+      const { data: lr, ts } = JSON.parse(raw)
+      if (Date.now() - ts > 7 * 24 * 3600 * 1000) {
+        localStorage.removeItem('moat-inspector-last-run')
+        return
+      }
+      if (!lr?.active?.length) return
+      const byRep = {}
+      lr.active.forEach(d => {
+        const o = d._owner || 'Unknown'
+        if (!byRep[o]) byRep[o] = []
+        byRep[o].push(d)
+      })
+      const sorted = Object.entries(byRep).sort(([, a], [, b]) =>
+        b.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0) -
+        a.flatMap(d => d._flags || []).reduce((s, f) => s + f.weight, 0)
+      )
+      setAllDeals(lr.active)
+      setRepsSorted(sorted)
+      const allFlags    = lr.active.flatMap(d => d._flags || [])
+      const aesWithCrit = sorted.filter(([, deals]) =>
+        deals.flatMap(d => d._flags || []).some(f => f.sev === 'critical')
+      ).length
+      setStats({
+        aes: sorted.length,
+        deals: lr.active.length,
+        pipe: lr.active.reduce((s, d) => s + d.f_amount_num, 0),
+        crit: allFlags.filter(f => f.sev === 'critical').length,
+        warn: allFlags.filter(f => f.sev === 'warn').length,
+        aesWithCrit,
+      })
+      setLastRunDate(new Date(ts))
+    } catch {}
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Clear cached last-run when new import data arrives
+  const importMetaFilename = useForecastStore(s => s.importMeta?.filename)
+  const prevFilenameRef = React.useRef(importMetaFilename)
+  React.useEffect(() => {
+    if (prevFilenameRef.current !== undefined && prevFilenameRef.current !== importMetaFilename) {
+      localStorage.removeItem('moat-inspector-last-run')
+      setLastRunDate(null)
+    }
+    prevFilenameRef.current = importMetaFilename
+  }, [importMetaFilename])
 
   // Effective column visibility — aiaction auto-shows when AI is on
   const effectiveCols = useMemo(() => ({
@@ -788,7 +811,10 @@ export default function Inspector() {
       sorted.forEach(([owner]) => setRepLoading(owner))
 
       if (!runAiActive) {
-        finishRun({ repsSorted: sorted, active, runDate: new Date() })
+        const lr = { repsSorted: sorted, active, runDate: new Date() }
+        finishRun(lr)
+        try { localStorage.setItem('moat-inspector-last-run', JSON.stringify({ data: lr, ts: Date.now() })) } catch {}
+        setLastRunDate(new Date())
         return
       }
 
@@ -814,7 +840,10 @@ export default function Inspector() {
         }
       }
 
-      finishRun({ repsSorted: sorted, active, runDate: new Date() })
+      const lr = { repsSorted: sorted, active, runDate: new Date() }
+      finishRun(lr)
+      try { localStorage.setItem('moat-inspector-last-run', JSON.stringify({ data: lr, ts: Date.now() })) } catch {}
+      setLastRunDate(new Date())
       logUsage(totalIn, totalOut, sorted.length, active.length)
     } catch (err) {
       console.error('[Inspector] run failed:', err)
@@ -893,6 +922,11 @@ export default function Inspector() {
           </button>
         )}
         {runCost !== null && <span className="text-[11px] text-[var(--tx2)]">${runCost.toFixed(3)} last run</span>}
+        {lastRunDate && !localRunning && !insp.isRunning && (
+          <span className="text-[11px] text-[var(--tx2)]">
+            Last run: {lastRunDate.toLocaleDateString()} · Re-run to refresh
+          </span>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* AI toggle */}
@@ -1027,6 +1061,9 @@ export default function Inspector() {
           <button onClick={() => setRunError(null)} className="ml-auto text-[11px] underline cursor-pointer">Dismiss</button>
         </div>
       )}
+
+      {/* Unmapped category banner */}
+      <UnmappedBanner />
 
       {/* Stats bar */}
       {stats && (

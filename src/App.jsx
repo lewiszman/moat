@@ -36,6 +36,10 @@ export default function App() {
         const user = session?.user ?? null
         setUser(user)
         initApiKey(user?.id)
+        // Restore most recent auto-save on initial page load when already signed in
+        if (user) {
+          useSessionStore.getState().restoreLatest(user)
+        }
       })
       const { data } = supabase.auth.onAuthStateChange((_event, session) => {
         const user = session?.user ?? null

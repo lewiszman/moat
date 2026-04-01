@@ -11,7 +11,7 @@ export default function Tooltip({ title, body, children }) {
         className="
           absolute bottom-full left-1/2 -translate-x-1/2 mb-2
           w-[280px] p-3 rounded-lg border border-[var(--bdr2)]
-          bg-[var(--bg)] shadow-lg text-left z-50
+          bg-[var(--bg)] shadow-lg text-left z-[9999]
           pointer-events-none
           opacity-0 scale-95
           group-hover:opacity-100 group-hover:scale-100

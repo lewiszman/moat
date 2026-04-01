@@ -163,20 +163,21 @@ function makeForecastStore(storeName, isNextQuarter = false) {
             s.closed    = agg.closed
             s.derived   = computeDerived(s)
           })
-          // Persist import data to dedicated keys (kept separate from main
-          // forecast state to avoid hitting the ~5 MB localStorage limit)
+          // Persist import data to shared keys (both CQ and Q1 share the same import)
           try {
-            localStorage.setItem(`${storeName}-import`, JSON.stringify(records))
-            localStorage.setItem(`${storeName}-import-meta`, JSON.stringify(meta))
+            localStorage.setItem('moat-import-data', JSON.stringify(records))
+            localStorage.setItem('moat-import-meta', JSON.stringify(meta))
           } catch (e) {
             console.warn('[store] Failed to persist import data:', e)
           }
         },
 
+        setImportMeta: (meta) => set(s => { s.importMeta = meta }),
+
         clearImport: () => {
           set(s => { s.importedData = null; s.importMeta = null; s.scopeSelected = null })
-          localStorage.removeItem(`${storeName}-import`)
-          localStorage.removeItem(`${storeName}-import-meta`)
+          localStorage.removeItem('moat-import-data')
+          localStorage.removeItem('moat-import-meta')
         },
 
         // Sets the AE filter for the rep panel only.
@@ -213,8 +214,8 @@ function makeForecastStore(storeName, isNextQuarter = false) {
             // Pipeline inputs are already in the main partialize so we only
             // need the raw records (for Inspector) and meta (for the import UI).
             try {
-              const rawData = localStorage.getItem(`${storeName}-import`)
-              const rawMeta = localStorage.getItem(`${storeName}-import-meta`)
+              const rawData = localStorage.getItem('moat-import-data')
+              const rawMeta = localStorage.getItem('moat-import-meta')
               if (rawData) {
                 state.importedData = JSON.parse(rawData)
                 state.importMeta   = rawMeta ? JSON.parse(rawMeta) : null
@@ -234,6 +235,10 @@ function makeForecastStore(storeName, isNextQuarter = false) {
 // ── Two independent quarter stores ─────────────────────────────
 const useCqStore = makeForecastStore('moat-forecast-cq-v2', false)
 const useQ1Store = makeForecastStore('moat-forecast-q1-v2', true)
+
+// Exported for snapshot.js (avoids circular deps — snapshot.js imports from here, not vice versa)
+export const getCqState = () => useCqStore.getState()
+export const getQ1State = () => useQ1Store.getState()
 
 // ── Quarter switcher store ─────────────────────────────────────
 export const useQuarterStore = create(
@@ -352,7 +357,7 @@ export const useInspectorStore = create(
         usageLog: s.usageLog, aiEnabled: s.aiEnabled,
         defaultSfdcUrl: s.defaultSfdcUrl,
         groupBy: s.groupBy, sortBy: s.sortBy,
-        repResults: s.repResults, lastResult: s.lastResult,
+        // repResults and lastResult are session-only — persisted via moat-inspector-last-run with TTL
       }),
     }
   )

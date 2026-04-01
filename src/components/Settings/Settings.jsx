@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useInspectorStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
-import { useVocabStore, DEFAULT_VOCAB } from '../../lib/vocab'
+import { useVocabStore, DEFAULT_VOCAB, useCatMapStore, DEFAULT_CAT_MAP } from '../../lib/vocab'
 import { DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { fmt } from '../../lib/fmt'
 
@@ -64,6 +64,7 @@ function GeneralTab() {
   const inspector   = useInspectorStore()
   const activeQuarter = useQuarterStore(st => st.activeQuarter)
   const vocabStore  = useVocabStore()
+  const catMapStore = useCatMapStore()
 
   const [sfdcInput, setSfdcInput]     = useState(s.sfdcUrl || '')
   const [sfdcError, setSfdcError]     = useState('')
@@ -85,6 +86,26 @@ function GeneralTab() {
   const handleVocabReset = () => {
     vocabStore.resetVocab()
     setVocabDraft({ ...DEFAULT_VOCAB })
+  }
+
+  // Category map draft state — stored as comma-separated strings for editing
+  const [catMapDraft, setCatMapDraft] = useState(() =>
+    Object.fromEntries(Object.entries(catMapStore.catMap).map(([k, vs]) => [k, vs.join(', ')]))
+  )
+  const [catMapSaved, setCatMapSaved] = useState(false)
+
+  const handleCatMapSave = () => {
+    Object.entries(catMapDraft).forEach(([key, raw]) => {
+      const values = raw.split(',').map(v => v.trim()).filter(Boolean)
+      catMapStore.setCatMap(key, values)
+    })
+    setCatMapSaved(true)
+    setTimeout(() => setCatMapSaved(false), 2000)
+  }
+
+  const handleCatMapReset = () => {
+    catMapStore.resetCatMap()
+    setCatMapDraft(Object.fromEntries(Object.entries(DEFAULT_CAT_MAP).map(([k, vs]) => [k, vs.join(', ')])))
   }
 
   const overrideLabel = activeQuarter === 'q1' ? 'Q+1 Override' : 'CQ Override'
@@ -113,7 +134,18 @@ function GeneralTab() {
 
   const handleClear = () => {
     if (!confirm('Clear all saved data? Forecast inputs will be reset.')) return
-    const MOAT_KEYS = ['moat-forecast-cq-v2','moat-forecast-q1-v2','moat-active-quarter','moat-inspector-v3','moat-section-comments-v27','moat-deal-back-v27','moat-wow-v27','moat-vocab','rail_expanded','theme']
+    const MOAT_KEYS = [
+      'moat-forecast-cq-v2', 'moat-forecast-q1-v2', 'moat-active-quarter',
+      'moat-inspector-v3', 'moat-section-comments-v27', 'moat-deal-back-v27',
+      'moat-wow-v27', 'moat-vocab', 'rail_expanded', 'theme',
+      // Shared import keys
+      'moat-import-data', 'moat-import-meta', 'moat-cat-map',
+      // Inspector last-run cache
+      'moat-inspector-last-run',
+      // Legacy per-quarter import keys (pre-shared-key migration)
+      'moat-forecast-cq-v2-import', 'moat-forecast-cq-v2-import-meta',
+      'moat-forecast-q1-v2-import', 'moat-forecast-q1-v2-import-meta',
+    ]
     MOAT_KEYS.forEach(k => localStorage.removeItem(k))
     window.location.reload()
   }
@@ -188,6 +220,48 @@ function GeneralTab() {
           </button>
         </div>
       </Section>
+      <Section title="Forecast category mapping">
+        <p className="text-[11px] text-[var(--tx2)] mb-4">
+          Map raw CSV forecast category values to internal categories. Separate multiple values with commas.
+          Changes apply to the next import — re-import your CSV to update existing data.
+        </p>
+        <div className="flex flex-col gap-3">
+          {[
+            { key: 'worst_case', label: 'Worst Case' },
+            { key: 'call',       label: 'Call'       },
+            { key: 'best_case',  label: 'Best Case'  },
+            { key: 'pipeline',   label: 'Pipeline'   },
+            { key: 'closed',     label: 'Closed'     },
+            { key: 'omitted',    label: 'Omitted'    },
+          ].map(({ key, label }) => (
+            <div key={key} className="flex items-start gap-3">
+              <span className="text-[12px] text-[var(--tx2)] w-24 flex-shrink-0 pt-1.5">
+                {vocabStore.vocab[key] || label}
+              </span>
+              <div className="flex-1">
+                <input
+                  className="w-full text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
+                  value={catMapDraft[key] || ''}
+                  onChange={e => setCatMapDraft(d => ({ ...d, [key]: e.target.value }))}
+                  placeholder={DEFAULT_CAT_MAP[key]?.join(', ')}
+                />
+                <div className="text-[10px] text-[var(--tx2)] mt-0.5">
+                  Raw values from your CSV that map to {vocabStore.vocab[key] || label}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <button onClick={handleCatMapSave} className="btn btn-primary text-[11px]">
+            {catMapSaved ? 'Saved ✓' : 'Save mapping'}
+          </button>
+          <button onClick={handleCatMapReset} className="text-[11px] text-[var(--tx2)] hover:text-[var(--tx)] border-none bg-transparent cursor-pointer p-0">
+            Reset to defaults
+          </button>
+        </div>
+      </Section>
+
       <Section title="Danger zone" danger>
         <Row label="Reset all data" sub="Clears all forecast inputs, import data, and settings.">
           <button onClick={handleClear} className="btn text-[11px] text-red-600 border-red-200 hover:bg-red-50">

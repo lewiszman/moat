@@ -120,7 +120,7 @@ export default function QuarterlyInputs() {
       </div>
 
       {/* Pipeline table */}
-      <div className="card overflow-hidden">
+      <div className="card !overflow-visible">
         <div className="grid grid-cols-[1fr_auto_auto_auto] gap-3 px-4 py-2 bg-[var(--bg2)] border-b border-[var(--bdr2)]">
           <span className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">Category</span>
           <span className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] w-28">Open pipeline</span>

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
-import { listSessions, saveNamedSession, fetchSession, deleteSession, extractSnapshot } from '../lib/supabase'
+import { listSessions, saveNamedSession, fetchSession, deleteSession, autoSaveSession } from '../lib/supabase'
 import { useForecastStore } from './forecastStore'
+import { buildSnapshot, applySnapshot } from '../lib/snapshot'
 
 export const useSessionStore = create((set, get) => ({
   user: null,          // Supabase User object or null
@@ -33,9 +34,8 @@ export const useSessionStore = create((set, get) => ({
     const { user } = get()
     if (!user) return
     set({ saving: true, saveError: null })
-    const state       = useForecastStore.getState()
-    const snapshot    = extractSnapshot(state)
-    const quarterLabel = state.quarterLabel || 'Unknown'
+    const snapshot     = buildSnapshot()
+    const quarterLabel = useForecastStore.getState().quarterLabel || 'Unknown'
     const { error } = await saveNamedSession(user.id, quarterLabel, snapshot, label)
     if (error) {
       set({ saving: false, saveError: error.message })
@@ -45,12 +45,22 @@ export const useSessionStore = create((set, get) => ({
     }
   },
 
-  // Restore: fetch snapshot from Supabase and merge into forecast store
+  // Restore a specific session: fetch snapshot and apply to all stores
   restoreSession: async (sessionId) => {
     const { user } = get()
     const { data, error } = await fetchSession(sessionId, user?.id)
     if (error || !data?.snapshot) return
-    useForecastStore.getState().loadSnapshot(data.snapshot)
+    applySnapshot(data.snapshot)
+  },
+
+  // Restore the most recent auto-save on initial sign-in
+  restoreLatest: async (user) => {
+    if (!user) return
+    const { data } = await listSessions(user.id, 1)
+    if (!data?.length) return
+    const { data: full, error } = await fetchSession(data[0].id, user.id)
+    if (error || !full?.snapshot) return
+    applySnapshot(full.snapshot)
   },
 
   // Delete a session and refresh list

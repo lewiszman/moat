@@ -1,6 +1,15 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
+export const DEFAULT_CAT_MAP = {
+  worst_case: ['Worst Case', 'Commit'],
+  call:       ['Call', 'Probable', 'Forecast'],
+  best_case:  ['Best Case', 'Upside'],
+  pipeline:   ['Pipeline'],
+  closed:     ['Closed Won', 'Closed'],
+  omitted:    ['Omitted'],
+}
+
 export const DEFAULT_VOCAB = {
   worst_case: 'Worst Case',
   call:       'Call',
@@ -29,4 +38,21 @@ export function getVocab() {
 
 export function useVocab(key) {
   return useVocabStore(s => s.vocab[key] ?? DEFAULT_VOCAB[key] ?? key)
+}
+
+// ── Category map store ─────────────────────────────────────────
+// Maps internal category keys → arrays of raw CSV values.
+export const useCatMapStore = create(
+  persist(
+    (set) => ({
+      catMap: { ...DEFAULT_CAT_MAP },
+      setCatMap:   (key, values) => set(s => ({ catMap: { ...s.catMap, [key]: values } })),
+      resetCatMap: ()            => set({ catMap: { ...DEFAULT_CAT_MAP } }),
+    }),
+    { name: 'moat-cat-map', storage: createJSONStorage(() => localStorage) }
+  )
+)
+
+export function getCatMap() {
+  return useCatMapStore.getState().catMap
 }
