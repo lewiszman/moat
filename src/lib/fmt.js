@@ -45,6 +45,21 @@ export const isWeekday = (d) => {
   return day !== 0 && day !== 6
 }
 
+// Counts selling days from 'from' inclusive through 'to' (for total quarter sell days).
+// Unlike sellDaysRemaining, starts counting on 'from' itself, not the day after.
+export const sellDaysInQuarter = (from, to) => {
+  let count = 0
+  const d = new Date(from)
+  d.setHours(0, 0, 0, 0)
+  const end = new Date(to)
+  end.setHours(23, 59, 59, 999)
+  while (d <= end) {
+    if (isWeekday(d) && !isHoliday(d)) count++
+    d.setDate(d.getDate() + 1)
+  }
+  return count
+}
+
 export const sellDaysRemaining = (from, qEnd) => {
   let count = 0
   const d = new Date(from)

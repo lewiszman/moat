@@ -8,12 +8,14 @@ export default function CncWhatIf() {
   const s = useForecastStore()
   const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
-  const cnc_pipe       = d.cnc_pipe       || 0
-  const cnc_rev        = d.cnc_rev        || 0
-  const cnc_prorated   = d.cnc_prorated   || 0
-  const weeks_total    = d.weeks_total    || 1
+  const cnc_pipe        = d.cnc_pipe        || 0
+  const cnc_rev         = d.cnc_rev         || 0
+  const cnc_prorated    = d.cnc_prorated    || 0
+  const weeks_total     = d.weeks_total     || 1
   const weeks_remaining = d.weeks_remaining ?? weeks_total
-  const prorFactor     = weeks_total > 0 ? Math.round((weeks_remaining / weeks_total) * 100) : 100
+  const prorationFactor = d.prorationFactor ?? (weeks_total > 0 ? Math.min(weeks_remaining / weeks_total, 1) : 1)
+  const prorFactor      = Math.round(prorationFactor * 100)
+  const isFullQuarter   = prorationFactor >= 1
 
   return (
     <div className="card overflow-hidden">
@@ -77,20 +79,30 @@ export default function CncWhatIf() {
           <div className="text-[11px] text-[var(--tx2)]">{fmt(cnc_pipe)} × {pct(s.r_cnc)} C&amp;C rate</div>
         </div>
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Weeks remaining</div>
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Selling weeks</div>
           <div className="text-[18px] font-[700] text-[var(--tx)]">{weeks_remaining} <span className="text-[13px] font-[500] text-[var(--tx2)]">of {weeks_total}</span></div>
-          <div className="text-[11px] text-[var(--tx2)]">selling weeks in quarter</div>
+          <div className="text-[11px] text-[var(--tx2)]">{weeks_remaining === 0 ? '0 selling weeks remaining' : 'remaining of total selling weeks'}</div>
         </div>
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">C&amp;C prorated ({prorFactor}%)</div>
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">C&amp;C prorated</div>
           <div className="text-[18px] font-[700] text-[var(--green)]">{fmt(cnc_prorated)}</div>
-          <div className="text-[11px] text-[var(--tx2)]">Prorated for weeks remaining — included in {vocab.worst_case} FC</div>
+          <div className="text-[11px] text-[var(--tx2)]">
+            {isFullQuarter
+              ? 'Full quarter (no proration)'
+              : weeks_remaining === 0
+                ? '0 selling weeks remaining'
+                : `${weeks_remaining} of ${weeks_total} wks · ${prorFactor}% proration`}
+            {' '}— included in {vocab.worst_case} FC
+          </div>
         </div>
       </div>
 
       {/* Note */}
       <div className="px-4 py-2.5 bg-[var(--bg2)] border-t border-[var(--bdr2)] text-[11px] text-[var(--tx2)]">
-        Prorated C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> included in {vocab.worst_case} forecast and above
+        {isFullQuarter
+          ? <>Full-quarter C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> included in {vocab.worst_case} forecast and above</>
+          : <>Prorated C&amp;C of <strong className="text-[var(--tx)]">{fmt(cnc_prorated)}</strong> ({prorFactor}% of {fmt(cnc_rev)}) included in {vocab.worst_case} forecast and above</>
+        }
       </div>
     </div>
   )

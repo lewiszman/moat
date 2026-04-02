@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { calcForecast } from '../lib/forecast'
 import { aggregateForecast, calcMonthlyClosedBreakdown } from '../lib/import'
-import { getFiscalQuarterInfo, sellDaysRemaining } from '../lib/fmt'
+import { getFiscalQuarterInfo, sellDaysRemaining, sellDaysInQuarter } from '../lib/fmt'
 
 // ── Snapshot key allowlist ─────────────────────────────────────
 // Only these fields are merged when restoring a snapshot or share URL.
@@ -74,18 +74,20 @@ function makeComputeDerived(isNextQuarter) {
     const qMode      = isNextQuarter ? 'next' : 'current'
     const qInfo      = getFiscalQuarterInfo(qMode, s.fyStartMonth || 1)
     const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
-    const calWeeks   = Math.round((qInfo.qEndDate - qStartDate) / (7 * 24 * 3600 * 1000))
-    const weeks_total = Math.max(1, calWeeks - 2)
-    const weeks_remaining = isNextQuarter
+    const totalSellDays   = sellDaysInQuarter(qStartDate, qInfo.qEndDate)
+    const weeks_total     = Math.max(1, Math.ceil(totalSellDays / 5) - 2)
+    const rawWeeksLeft    = isNextQuarter
       ? weeks_total
       : Math.max(0, Math.ceil(sellDaysRemaining(new Date(), qInfo.qEndDate) / 5))
-    const cnc_prorated = cnc_rev * (weeks_total > 0 ? weeks_remaining / weeks_total : 0)
+    const weeks_remaining = Math.min(rawWeeksLeft, weeks_total)
+    const prorationFactor = weeks_total > 0 ? Math.min(weeks_remaining / weeks_total, 1) : 1
+    const cnc_prorated    = cnc_rev * prorationFactor
 
     const { fc_worst_case, fc_call, fc_best_case, fc_full, bk_bc_in_call } = calcForecast({
       closed: s.closed, bk_wc, bk_call, bk_bc, bk_pp, cnc_prorated,
       callIncludesBestCase: s.callIncludesBestCase,
     })
-    return { bk_wc, bk_call, bk_bc, bk_pp, cnc_pipe, cnc_rev, cnc_prorated, weeks_total, weeks_remaining, fc_worst_case, fc_call, fc_best_case, fc_full, bk_bc_in_call }
+    return { bk_wc, bk_call, bk_bc, bk_pp, cnc_pipe, cnc_rev, cnc_prorated, weeks_total, weeks_remaining, prorationFactor, fc_worst_case, fc_call, fc_best_case, fc_full, bk_bc_in_call }
   }
 }
 
