@@ -1,255 +1,290 @@
 import React, { useMemo } from 'react'
-import { useForecastStore, useQuarterStore } from '../../store/forecastStore'
-import { parseMoney, getFiscalQuarterInfo } from '../../lib/fmt'
+import { useForecastStore, useWowStore, useQuarterStore } from '../../store/forecastStore'
+import { calcMonthlyBreakdown } from '../../lib/import'
+import { fmt } from '../../lib/fmt'
 
-// ── Month metadata ──────────────────────────────────────────────
-
-function getQuarterMonths(fyStartMonth, isNextQuarter) {
-  // Always derive from current quarter, then advance 3 months for Q+1.
-  // getFiscalQuarterInfo('next') computes the right label but doesn't advance
-  // qStartMonth/qStartYear, so we do it manually here.
-  const info = getFiscalQuarterInfo('current', fyStartMonth)
-  const now  = new Date()
-  now.setHours(0, 0, 0, 0)
-
-  let startMonth = info.qStartMonth
-  let startYear  = info.qStartYear
-  if (isNextQuarter) {
-    const next = ((info.qStartMonth - 1 + 3) % 12) + 1
-    if (next <= info.qStartMonth) startYear++ // crossed a year boundary
-    startMonth = next
-  }
-
-  return [0, 1, 2].map(offset => {
-    const rawIdx  = startMonth - 1 + offset
-    const mYear   = startYear + Math.floor(rawIdx / 12)
-    const mNum    = (rawIdx % 12) + 1
-    const lastDay = new Date(mYear, mNum, 0)
-    lastDay.setHours(23, 59, 59, 999)
-    const isPast    = lastDay < now
-    const isCurrent = now.getMonth() + 1 === mNum && now.getFullYear() === mYear
-    const key       = `m${offset + 1}`
-    return { mNum, mYear, isPast, isCurrent, key, label: `Month ${offset + 1}` }
-  })
+function fmtDelta(curr, prior) {
+  if (prior == null || curr == null) return '—'
+  const delta = curr - prior
+  if (Math.abs(delta) < 1) return '—'
+  const abs = Math.abs(delta)
+  const sign = delta > 0 ? '+' : '−'
+  const k = Math.round(abs / 1000)
+  return `${sign}$${k}k`
 }
 
-// ── Editable cell ───────────────────────────────────────────────
+// Pipeline columns — from import data
+const PIPE_COLS = [
+  { key: 'closed',     label: 'Closed',    color: '#0d7c3d', showCount: true },
+  { key: 'worst_case', label: 'Worst',     color: '#1a56db', showCount: true },
+  { key: 'call',       label: 'Forecast',  color: '#0d7c3d', showCount: true },
+  { key: 'best_case',  label: 'Best Case', color: '#b45309', showCount: true },
+  { key: 'pipeline',   label: 'Pipeline',  color: '#6b7280', showCount: true },
+]
 
-function Cell({ value, locked, onChange }) {
-  const [raw, setRaw] = React.useState(null)
+// Forecast columns — derived from rates + C&C
+const FC_COLS = [
+  { key: 'fc_wc',   label: 'WC FC', color: '#1a56db' },
+  { key: 'fc_call', label: 'FC',    color: '#0d7c3d' },
+  { key: 'fc_bc',   label: 'BC FC', color: '#b45309' },
+]
 
-  if (locked) {
+export default function MonthlyBreakdown() {
+  const importedData         = useForecastStore(s => s.importedData)
+  const scopeSelected        = useForecastStore(s => s.scopeSelected)
+  const r_wc                 = useForecastStore(s => s.r_worst_case)
+  const r_call               = useForecastStore(s => s.r_call)
+  const r_bc                 = useForecastStore(s => s.r_best_case)
+  const callIncludesBestCase = useForecastStore(s => s.callIncludesBestCase)
+  const derived              = useForecastStore(s => s.derived)
+  const fyStart              = useForecastStore(s => s.fyStartMonth) || 1
+  const aq                   = useQuarterStore(s => s.activeQuarter)
+  const wow                  = useWowStore()
+
+  const isNextQuarter = aq === 'q1'
+  const isFiltered    = scopeSelected?.size > 0
+
+  // Scope data to selected AEs when filter is active
+  const scopedData = useMemo(() => {
+    if (!importedData?.length) return importedData
+    if (!isFiltered) return importedData
+    return importedData.filter(d => scopeSelected.has(d.f_owner))
+  }, [importedData, scopeSelected, isFiltered])
+
+  // Prorate C&C by the selected AEs' share of total active deals (matches calcRepForecast)
+  const cnc_prorated = useMemo(() => {
+    const base = derived?.cnc_prorated || 0
+    if (!isFiltered || !importedData?.length) return base
+    const totalActive    = importedData.filter(d => !['closed','omitted'].includes(d.f_fc_cat_norm)).length
+    const selectedActive = (scopedData || []).filter(d => !['closed','omitted'].includes(d.f_fc_cat_norm)).length
+    const aeShare = totalActive > 0 ? selectedActive / totalActive : 0
+    return base * aeShare
+  }, [derived, isFiltered, importedData, scopedData])
+
+  const breakdown = useMemo(
+    () => calcMonthlyBreakdown(scopedData, fyStart, isNextQuarter),
+    [scopedData, fyStart, isNextQuarter]
+  )
+
+  // Per-month FC calculation
+  // C&C is split equally only among future months (not current, not past)
+  const monthlyFC = useMemo(() => {
+    if (!breakdown) return null
+    const futureCount = breakdown.filter(m => !m.isPast && !m.isCurrent).length
+    const cncPerFuture = futureCount > 0 ? cnc_prorated / futureCount : 0
+
+    return breakdown.map(m => {
+      const isFuture = !m.isPast && !m.isCurrent
+      const m_cnc    = isFuture ? cncPerFuture : 0
+
+      const bk_wc   = m.worst_case * (r_wc   / 100)
+      const bk_call = m.call       * (r_call  / 100)
+      const bk_bc   = m.best_case  * (r_bc    / 100)
+      const bk_bc_in_call = callIncludesBestCase ? bk_bc * 0.5 : 0
+
+      const fc_wc   = m.closed + m_cnc + bk_wc
+      const fc_call = fc_wc + bk_call + bk_bc_in_call
+      const fc_bc   = fc_call + (bk_bc - bk_bc_in_call)
+
+      return { fc_wc, fc_call, fc_bc, m_cnc }
+    })
+  }, [breakdown, cnc_prorated, r_wc, r_call, r_bc, callIncludesBestCase])
+
+  // WoW variance — only for pipeline cols, only if prior snapshot has array monthly
+  const wowSnapshots = useMemo(
+    () => [...wow.snapshots]
+      .filter(s => (s.quarterKey ?? 'cq') === aq)
+      .sort((a, b) => new Date(b.date) - new Date(a.date)),
+    [wow.snapshots, aq]
+  )
+  const priorMonthly = wowSnapshots.length >= 2 && Array.isArray(wowSnapshots[1]?.monthly)
+    ? wowSnapshots[1].monthly
+    : null
+
+  if (!importedData?.length || !breakdown || !monthlyFC) {
     return (
-      <span className="text-[12px] font-[600] text-[var(--tx2)]">
-        {value > 0 ? '$' + Math.round(value).toLocaleString('en-US') : '—'}
-      </span>
+      <div className="card p-6 text-center text-[13px] text-[var(--tx2)]">
+        Import pipeline data to see monthly breakdown by forecast category
+      </div>
     )
   }
 
-  const display = raw !== null ? raw : (value > 0 ? value.toLocaleString('en-US') : '')
-
-  return (
-    <div className="flex items-center gap-px">
-      <span className="text-[11px] text-[var(--tx2)]">$</span>
-      <input
-        type="text"
-        value={display}
-        onFocus={() => setRaw(value > 0 ? String(Math.round(value)) : '')}
-        onChange={e => setRaw(e.target.value)}
-        onBlur={() => { onChange(parseMoney(raw ?? '')); setRaw(null) }}
-        className="w-20 text-[12px] font-[600] text-[var(--tx)] bg-transparent border-b border-[var(--bdr2)] focus:border-[var(--blue)] outline-none py-0.5"
-      />
-    </div>
-  )
-}
-
-// ── Component ───────────────────────────────────────────────────
-
-const ROWS = [
-  { label: 'Closed',   sub: 'closed', color: 'var(--green)' },
-  { label: 'Worst Case', sub: 'worst_case', color: 'var(--blue)'  },
-  { label: 'Call',       sub: 'call',       color: 'var(--green)' },
-  { label: 'Best Case',  sub: 'best_case',  color: 'var(--amber)' },
-]
-
-const COL = '120px repeat(3, 1fr) 100px'
-
-export default function MonthlyBreakdown() {
-  const s        = useForecastStore()
-  const fyStart  = s.fyStartMonth || 1
-  const unlocked     = s.monthUnlocked || { m1: false, m2: false, m3: false }
-  const activeQuarter = useQuarterStore(s => s.activeQuarter)
-  const isNextQuarter = activeQuarter === 'q1'
-
-  const months = useMemo(() => getQuarterMonths(fyStart, isNextQuarter), [fyStart, isNextQuarter])
-
-  // Past months lock ALL rows to actuals (only closed matters once month ends).
-  function isPastLocked(m) {
-    return m.isPast && !unlocked[m.key]
-  }
-
-  // Per-row totals across months
-  const rowTotals = ROWS.map(row =>
-    months.reduce((sum, m) => {
-      // For locked months, every category counts as closed
-      const val = isPastLocked(m)
-        ? (s[`${m.key}_closed`] || 0)
-        : (s[`${m.key}_${row.sub}`] || 0)
-      return sum + val
-    }, 0)
-  )
-
-  // Linearity: monthly closed as % of quarterly closed total
-  const qClosed     = months.reduce((sum, m) => sum + (s[`${m.key}_closed`] || 0), 0)
-  const monthClosed = months.map(m => s[`${m.key}_closed`] || 0)
-  const linPct      = monthClosed.map(v => qClosed > 0 ? (v / qClosed) * 100 : 0)
-  const quotaPace   = (s.quota || 0) / 3
+  // Quarter totals
+  const pipeTotals = PIPE_COLS.reduce((acc, c) => {
+    acc[c.key]           = breakdown.reduce((s, m) => s + (m[c.key] || 0), 0)
+    acc[`${c.key}_count`] = breakdown.reduce((s, m) => s + (m[`${c.key}_count`] || 0), 0)
+    return acc
+  }, {})
+  const fcTotals = FC_COLS.reduce((acc, c) => {
+    acc[c.key] = monthlyFC.reduce((s, mfc) => s + (mfc[c.key] || 0), 0)
+    return acc
+  }, {})
 
   return (
     <div className="card overflow-hidden">
+      <div className="text-[11px] text-[var(--tx2)] px-4 pt-3 pb-1">
+        Based on deal close dates from imported pipeline · deals outside this quarter excluded
+      </div>
 
-      {/* ── Column headers ── */}
-      <div className="grid items-center bg-[var(--bg2)] border-b border-[var(--bdr2)]"
-           style={{ gridTemplateColumns: COL }}>
-        <div className="px-3 py-2" />
-        {months.map(m => (
-          <div key={m.key} className="px-3 py-2 flex flex-col items-center gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] font-[700] text-[var(--tx)]">{m.label}</span>
-              {m.isCurrent && (
-                <span className="text-[8px] font-[700] uppercase tracking-wide bg-blue-100 text-blue-700 px-1 py-px rounded">
-                  now
-                </span>
-              )}
-            </div>
-            {/* Lock / unlock toggle — only relevant for CQ past months */}
-            {m.isPast && (
-              isPastLocked(m) ? (
-                <button
-                  onClick={() => s.toggleMonthLock(m.key)}
-                  className="text-[9px] text-[var(--tx2)] hover:text-[var(--blue)] flex items-center gap-0.5 bg-transparent border-none p-0 cursor-pointer"
-                  title="Unlock to edit"
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="border-b border-[var(--bdr2)] bg-[var(--bg2)]">
+              <th className="px-3 py-2 text-left text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] whitespace-nowrap">
+                Month
+              </th>
+              {/* Pipeline column group */}
+              {PIPE_COLS.map(c => (
+                <th
+                  key={c.key}
+                  className="px-3 py-2 text-right text-[10px] font-[700] uppercase tracking-wider whitespace-nowrap"
+                  style={{ color: c.color }}
                 >
-                  🔒 locked
-                </button>
-              ) : (
-                <button
-                  onClick={() => s.toggleMonthLock(m.key)}
-                  className="text-[9px] text-amber-600 hover:text-red-600 flex items-center gap-0.5 bg-transparent border-none p-0 cursor-pointer"
-                  title="Re-lock"
+                  {c.label}
+                </th>
+              ))}
+              {/* Divider */}
+              <th className="w-px bg-[var(--bdr2)]" />
+              {/* FC column group */}
+              {FC_COLS.map(c => (
+                <th
+                  key={c.key}
+                  className="px-3 py-2 text-right text-[10px] font-[700] uppercase tracking-wider whitespace-nowrap"
+                  style={{ color: c.color }}
                 >
-                  🔓 unlocked
-                </button>
+                  {c.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {breakdown.map((m, mi) => {
+              const mfc = monthlyFC[mi]
+              return (
+                <tr
+                  key={mi}
+                  className="border-b border-[var(--bdr2)]"
+                  style={mi % 2 === 1 ? { background: 'var(--bg2)' } : undefined}
+                >
+                  {/* Month cell */}
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-[700] text-[var(--tx)]">{m.label}</span>
+                      {m.isCurrent && (
+                        <span className="text-[8px] font-[700] uppercase tracking-wide bg-blue-100 text-blue-700 px-1.5 py-px rounded-full">
+                          current
+                        </span>
+                      )}
+                      {m.isPast && (
+                        <span className="text-[8px] font-[700] uppercase tracking-wide bg-gray-100 text-gray-500 px-1.5 py-px rounded-full">
+                          past
+                        </span>
+                      )}
+                    </div>
+                    {/* C&C footnote for future months */}
+                    {mfc.m_cnc > 0 && (
+                      <div className="text-[9px] text-[var(--tx2)] mt-0.5">
+                        +{fmt(mfc.m_cnc)} C&amp;C
+                      </div>
+                    )}
+                  </td>
+
+                  {/* Pipeline cells */}
+                  {PIPE_COLS.map(c => {
+                    const amt   = m[c.key] || 0
+                    const count = m[`${c.key}_count`] || 0
+                    return (
+                      <td key={c.key} className="px-3 py-2.5 text-right">
+                        <div className="font-[600]" style={{ color: c.color }}>
+                          {amt > 0 ? fmt(amt) : '—'}
+                        </div>
+                        {c.showCount && count > 0 && (
+                          <div className="text-[9px] text-[var(--tx2)]">{count}d</div>
+                        )}
+                      </td>
+                    )
+                  })}
+
+                  {/* Group divider */}
+                  <td className="w-px bg-[var(--bdr2)] p-0" />
+
+                  {/* FC cells */}
+                  {FC_COLS.map(c => {
+                    const amt = mfc[c.key] || 0
+                    return (
+                      <td key={c.key} className="px-3 py-2.5 text-right">
+                        <div className="font-[700]" style={{ color: c.color }}>
+                          {amt > 0 ? fmt(amt) : '—'}
+                        </div>
+                      </td>
+                    )
+                  })}
+                </tr>
               )
+            })}
+
+            {/* Quarter totals row */}
+            <tr className="border-t-2 border-[var(--bdr2)]" style={{ background: 'var(--bg2)' }}>
+              <td className="px-3 py-2.5 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] whitespace-nowrap">
+                Quarter
+              </td>
+              {PIPE_COLS.map(c => {
+                const amt   = pipeTotals[c.key] || 0
+                const count = pipeTotals[`${c.key}_count`] || 0
+                return (
+                  <td key={c.key} className="px-3 py-2.5 text-right">
+                    <div className="font-[700]" style={{ color: c.color }}>
+                      {amt > 0 ? fmt(amt) : '—'}
+                    </div>
+                    {c.showCount && count > 0 && (
+                      <div className="text-[9px] text-[var(--tx2)]">{count}d</div>
+                    )}
+                  </td>
+                )
+              })}
+              <td className="w-px bg-[var(--bdr2)] p-0" />
+              {FC_COLS.map(c => (
+                <td key={c.key} className="px-3 py-2.5 text-right">
+                  <div className="font-[700]" style={{ color: c.color }}>
+                    {(fcTotals[c.key] || 0) > 0 ? fmt(fcTotals[c.key]) : '—'}
+                  </div>
+                </td>
+              ))}
+            </tr>
+
+            {/* Variance row — pipeline cols only; FC cols show — */}
+            {priorMonthly && (
+              <tr className="border-t border-[var(--bdr2)]">
+                <td className="px-3 py-2 text-[9px] font-[700] uppercase tracking-wider text-[var(--tx2)] whitespace-nowrap">
+                  vs prior snap
+                </td>
+                {PIPE_COLS.map(c => {
+                  return (
+                    <td key={c.key} className="px-3 py-2 text-right">
+                      {breakdown.map((m, mi) => {
+                        const curr  = m[c.key] || 0
+                        const prior = priorMonthly[mi]?.[c.key] ?? null
+                        const str   = fmtDelta(curr, prior)
+                        if (str === '—') return <div key={mi} className="text-[9px] text-[var(--tx2)]">—</div>
+                        const isPos = str.startsWith('+')
+                        return (
+                          <div key={mi} className="text-[9px] font-[600]" style={{ color: isPos ? '#059669' : '#dc2626' }}>
+                            {str}
+                          </div>
+                        )
+                      })}
+                    </td>
+                  )
+                })}
+                <td className="w-px bg-[var(--bdr2)] p-0" />
+                {FC_COLS.map(c => (
+                  <td key={c.key} className="px-3 py-2 text-right text-[9px] text-[var(--tx2)]">—</td>
+                ))}
+              </tr>
             )}
-          </div>
-        ))}
-        <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] text-right">
-          Quarter
-        </div>
+          </tbody>
+        </table>
       </div>
-
-      {/* ── Data rows ── */}
-      {ROWS.map((row, ri) => (
-        <div key={row.sub}
-             className="grid items-center border-b border-[var(--bdr2)]"
-             style={{ gridTemplateColumns: COL }}>
-
-          <div className="px-3 py-2.5 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: row.color }} />
-            <span className="text-[12px] font-[600] text-[var(--tx)]">{row.label}</span>
-          </div>
-
-          {months.map(m => {
-            const locked = isPastLocked(m)
-            // Locked months: all categories display closed amount
-            const displayVal = locked
-              ? (s[`${m.key}_closed`] || 0)
-              : (s[`${m.key}_${row.sub}`] || 0)
-            const fk = `${m.key}_${row.sub}`
-
-            return (
-              <div key={m.key} className="px-3 py-2.5 flex items-center">
-                <Cell
-                  value={displayVal}
-                  locked={locked}
-                  onChange={v => s.updateInput(fk, v)}
-                />
-              </div>
-            )
-          })}
-
-          <div className="px-3 py-2.5 text-right">
-            <span className="text-[12px] font-[700] text-[var(--tx)]">
-              {rowTotals[ri] > 0 ? '$' + Math.round(rowTotals[ri]).toLocaleString('en-US') : '—'}
-            </span>
-          </div>
-        </div>
-      ))}
-
-      {/* ── Linearity row ── */}
-      <div className="grid items-center border-t-2 border-[var(--bdr2)] bg-[var(--bg2)]"
-           style={{ gridTemplateColumns: COL }}>
-        <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
-          Linearity
-        </div>
-        {months.map((m, i) => {
-          const pct  = linPct[i]
-          const diff = pct - 33.33
-          const color = Math.abs(diff) < 3 ? 'var(--green)' : Math.abs(diff) < 8 ? 'var(--amber)' : 'var(--coral)'
-          return (
-            <div key={m.key} className="px-3 py-2 flex flex-col items-start gap-0.5">
-              <span className="text-[12px] font-[700]" style={{ color }}>
-                {qClosed > 0 ? pct.toFixed(0) + '%' : '—'}
-              </span>
-              {qClosed > 0 && (
-                <span className="text-[9px] text-[var(--tx2)]">
-                  {diff >= 0 ? '+' : ''}{diff.toFixed(0)}pp vs 33%
-                </span>
-              )}
-            </div>
-          )
-        })}
-        <div className="px-3 py-2 text-right text-[11px] font-[700] text-[var(--tx2)]">
-          {qClosed > 0 ? '100%' : '—'}
-        </div>
-      </div>
-
-      {/* ── vs Quota pace row ── */}
-      {s.quota > 0 && (
-        <div className="grid items-center border-t border-[var(--bdr2)] bg-[var(--bg2)]"
-             style={{ gridTemplateColumns: COL }}>
-          <div className="px-3 py-2 text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
-            vs Pace
-          </div>
-          {months.map((m, i) => {
-            const actual  = monthClosed[i]
-            const diff    = actual - quotaPace
-            const pct     = quotaPace > 0 ? (actual / quotaPace) * 100 : 0
-            const locked  = isPastLocked(m)
-            // Only show pace for past months with actuals, or current month
-            if (!locked && !m.isCurrent) {
-              return <div key={m.key} className="px-3 py-2 text-[10px] text-[var(--tx2)]">—</div>
-            }
-            const color = pct >= 100 ? 'var(--green)' : pct >= 80 ? 'var(--amber)' : 'var(--coral)'
-            return (
-              <div key={m.key} className="px-3 py-2 flex flex-col items-start gap-0.5">
-                <span className="text-[12px] font-[700]" style={{ color }}>
-                  {pct.toFixed(0)}%
-                </span>
-                <span className="text-[9px] text-[var(--tx2)]">
-                  {diff >= 0 ? '+' : ''}${Math.round(Math.abs(diff) / 1000)}k {diff >= 0 ? 'above' : 'below'}
-                </span>
-              </div>
-            )
-          })}
-          <div className="px-3 py-2 text-right">
-            <span className="text-[11px] font-[700] text-[var(--tx2)]">
-              {s.quota > 0 ? `${Math.round((qClosed / s.quota) * 100)}%` : '—'}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

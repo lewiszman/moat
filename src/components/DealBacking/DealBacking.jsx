@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useEffect } from 'react'
 import { useForecastStore, useDealBackStore, useQuarterStore } from '../../store/forecastStore'
 import { useVocabStore } from '../../lib/vocab'
+import { getQuarterMonths, isCloseInMonth } from '../../lib/import'
 import UnmappedBanner from '../shared/UnmappedBanner'
 import { fmt } from '../../lib/fmt'
 
@@ -143,7 +144,7 @@ function CncCard({ onDragStart, onDragEnd, cncOverrides, setCncOverride, clearCn
   )
 }
 
-function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop, onDragStart, onDragEnd, positions, cncCard, cncPos, cncBenchAcv }) {
+function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop, onDragStart, onDragEnd, positions, cncCard, cncPos, cncBenchAcv, filterLabel, totalColDeals }) {
   const vocab = useVocabStore(s => s.vocab)
   const colDealAmt  = deals.reduce((s, d) => s + d.acv, 0)
   const cncInThisCol = cncCard && cncPos === col.key
@@ -191,13 +192,16 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
         {/* Header */}
         <div className="px-4 pt-3 pb-2.5 border-b border-[var(--bdr2)]">
           <div className="text-[10px] font-[700] uppercase tracking-widest mb-1" style={{ color: col.accent }}>
-            {col.label}
+            {filterLabel && col.key !== 'bench' ? `${col.label} · ${filterLabel}` : col.label}
           </div>
           <div className="text-[22px] font-[700] leading-none mb-1" style={{ color: col.key === 'bench' ? 'var(--tx2)' : col.accent }}>
             {col.key === 'bench' ? fmt(colAmt) : fmt(cumTotal)}
           </div>
           <div className="text-[11px] text-[var(--tx2)]">
             {dealCount} deal{dealCount !== 1 ? 's' : ''}
+            {col.key !== 'bench' && filterLabel && totalColDeals != null && totalColDeals !== dealCount && (
+              <> of {totalColDeals}</>
+            )}
             {col.key !== 'bench' && <> · <span className="opacity-70">{fmt(colAmt)}</span></>}
           </div>
         </div>
@@ -214,8 +218,14 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
             ))}
             {/* C&C bench footnote */}
             {cncPos === 'bench' && col.key !== 'bench' && (
-              <div className="text-[10px] text-[var(--tx2)] italic pt-0.5" style={{ borderTop: '1px dashed var(--bdr2)', marginTop: '2px', paddingTop: '4px' }}>
+              <div className="text-[10px] text-[var(--tx2)] italic" style={{ borderTop: '1px dashed var(--bdr2)', marginTop: '2px', paddingTop: '4px' }}>
                 C&amp;C ({fmt(cncBenchAcv)}) in Bench — drag to include
+              </div>
+            )}
+            {/* Month filter footnote */}
+            {filterLabel && col.key !== 'bench' && totalColDeals != null && (
+              <div className="text-[10px] text-[var(--tx2)]" style={{ borderTop: '1px dashed var(--bdr2)', marginTop: '2px', paddingTop: '4px' }}>
+                Showing {deals.length} of {totalColDeals} deals · {filterLabel} close dates only
               </div>
             )}
           </div>
@@ -225,7 +235,11 @@ function KanbanCol({ col, deals, totals, closed, onDragOver, onDragLeave, onDrop
         <div className="flex-1 p-2 flex flex-col gap-1.5 min-h-[120px]">
           {deals.length === 0 && !cncInThisCol && (
             <div className="text-[11px] text-[var(--tx2)] italic text-center pt-4 opacity-60">
-              {col.key === 'bench' ? 'Drag deals here to park them' : 'Drop deals here'}
+              {col.key === 'bench'
+                ? 'Drag deals here to park them'
+                : filterLabel
+                  ? `No ${vocab[col.key] ?? col.key} deals closing in ${filterLabel}`
+                  : 'Drop deals here'}
             </div>
           )}
           {cncInThisCol && (
@@ -265,6 +279,7 @@ export default function DealBacking() {
   const cnc_opps        = useForecastStore(s => s.cnc_opps)
   const cnc_asp         = useForecastStore(s => s.cnc_asp)
   const r_cnc           = useForecastStore(s => s.r_cnc)
+  const fyStart         = useForecastStore(s => s.fyStartMonth) || 1
   const vocab           = useVocabStore(s => s.vocab)
 
   const COLS = COLS_BASE.map(c => ({
@@ -276,9 +291,19 @@ export default function DealBacking() {
   const aq  = useQuarterStore(s => s.activeQuarter)
   const positions    = db[`positions_${aq}`]    || {}
   const cncOverrides = db[`cncOverrides_${aq}`] || { opps: null, asp: null, rate: null }
-  const { move, reset, setCncOverride, clearCncOverrides } = db
+  const monthFilter  = db[`monthFilter_${aq}`]  || 'all'
+  const { move, reset, setCncOverride, clearCncOverrides, setMonthFilter } = db
   const [dragId, setDragId]     = React.useState(null)
   const [dragOver, setDragOver] = React.useState(null)
+
+  // Quarter months for filter labels (only when data present)
+  const quarterMonths = useMemo(
+    () => importedData?.length ? getQuarterMonths(fyStart, aq === 'q1') : [],
+    [fyStart, aq, importedData]
+  )
+
+  // Reset filter when active quarter switches
+  useEffect(() => { setMonthFilter('all') }, [aq]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // C&C synthetic card values
   const weeks_remaining = derived.weeks_remaining ?? 0
@@ -320,18 +345,34 @@ export default function DealBacking() {
 
   const closedAmt = deals.filter(d => d.closed).reduce((s, d) => s + d.acv, 0)
 
-  // Totals include C&C card
+  // Active month for filtering
+  const activeMonth = monthFilter !== 'all'
+    ? quarterMonths[parseInt(monthFilter[1]) - 1] ?? null
+    : null
+
+  // Totals — filtered when month is active; C&C always included
   const totals = { worst_case: 0, call: 0, best_case: 0, bench: 0 }
   deals.filter(d => !d.closed).forEach(d => {
+    if (activeMonth && !isCloseInMonth({ f_close_date: d.closeDate }, activeMonth)) return
     const col = effectivePositions[d.id] || 'best_case'
     totals[col] = (totals[col] || 0) + d.acv
   })
   totals[cncPos] = (totals[cncPos] || 0) + cncAcv
 
-  const dealsByCol = (colKey) =>
-    deals
-      .filter(d => !d.closed && effectivePositions[d.id] === colKey)
-      .sort((a, b) => b.acv - a.acv)
+  // Unfiltered counts per column (for footnote)
+  const totalsByColUnfiltered = {}
+  deals.filter(d => !d.closed).forEach(d => {
+    const col = effectivePositions[d.id] || 'best_case'
+    totalsByColUnfiltered[col] = (totalsByColUnfiltered[col] || 0) + 1
+  })
+
+  const dealsByCol = (colKey) => {
+    let rows = deals.filter(d => !d.closed && effectivePositions[d.id] === colKey)
+    if (activeMonth) {
+      rows = rows.filter(d => isCloseInMonth({ f_close_date: d.closeDate }, activeMonth))
+    }
+    return rows.sort((a, b) => b.acv - a.acv)
+  }
 
   const handleDragStart = (e, id) => {
     setDragId(id)
@@ -361,8 +402,28 @@ export default function DealBacking() {
 
   return (
     <div className="px-4 py-6">
-      {/* Toolbar stat bar */}
-      <div className="flex items-center gap-4 mb-4 flex-wrap">
+      {/* Toolbar */}
+      <div className="flex items-start gap-4 mb-4 flex-wrap">
+        {/* Month filter — only when importedData present */}
+        {importedData?.length > 0 && quarterMonths.length === 3 && (
+          <div className="flex items-center bg-[var(--bg2)] border border-[var(--bdr2)] rounded-lg p-0.5 gap-0.5 flex-shrink-0">
+            {[{ key: 'all', label: 'All' }, ...quarterMonths.map((m, i) => ({ key: `M${i + 1}`, label: m.short }))].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setMonthFilter(opt.key)}
+                className={`text-[11px] font-[600] px-2.5 py-1 rounded-md transition-colors border-none cursor-pointer ${
+                  monthFilter === opt.key
+                    ? 'bg-[var(--blue)] text-white'
+                    : 'bg-transparent text-[var(--tx2)] hover:text-[var(--tx)]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stat bar */}
         <div className="flex gap-3 flex-wrap flex-1">
           {[
             { label: 'Quota',                       val: fmt(quota),            color: '' },
@@ -381,7 +442,7 @@ export default function DealBacking() {
             </React.Fragment>
           ))}
         </div>
-        <button onClick={reset} className="btn text-[11px]">Reset</button>
+        <button onClick={reset} className="btn text-[11px] self-start">Reset</button>
       </div>
 
       {/* Unmapped category banner */}
@@ -405,6 +466,8 @@ export default function DealBacking() {
             cncCard={cncCardData}
             cncPos={cncPos}
             cncBenchAcv={cncAcv}
+            filterLabel={activeMonth?.short ?? null}
+            totalColDeals={totalsByColUnfiltered[col.key] ?? 0}
           />
         ))}
       </div>

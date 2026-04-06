@@ -218,12 +218,6 @@ export default function ManagerView() {
       <QuarterlyInputs />
 
       <div className="sec-hd">
-        Monthly breakdown
-        <SectionComment sectionKey="monthly" placeholder="e.g. M1 closed strong, M2 back-half weighted" />
-      </div>
-      <MonthlyBreakdown />
-
-      <div className="sec-hd">
         Conversion rate assumptions
         <SectionComment sectionKey="cr" placeholder="e.g. Commit rate lowered to 75% — two deals slipped last quarter" />
       </div>
@@ -249,6 +243,12 @@ export default function ManagerView() {
         <SectionComment sectionKey="cnc" placeholder="e.g. ASP reflects SMB segment only — mid-market deals excluded" />
       </div>
       <CncWhatIf />
+
+      <div className="sec-hd">
+        Monthly breakdown
+        <SectionComment sectionKey="monthly" placeholder="e.g. M1 closed strong, M2 back-half weighted" />
+      </div>
+      <MonthlyBreakdown />
 
       <div className="sec-hd">
         Week-over-week tracker

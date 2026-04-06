@@ -2,6 +2,89 @@
 import { getFiscalQuarterInfo } from './fmt'
 import { DEFAULT_CAT_MAP } from './vocab'
 
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+// Returns 3 month objects for the fiscal quarter.
+// fyStartMonth: 1-based fiscal year start month.
+// isNextQuarter: advance 3 months from current quarter start.
+export function getQuarterMonths(fyStartMonth = 1, isNextQuarter = false) {
+  const info = getFiscalQuarterInfo('current', fyStartMonth)
+  const now  = new Date()
+  now.setHours(0, 0, 0, 0)
+
+  let startMonth = info.qStartMonth
+  let startYear  = info.qStartYear
+  if (isNextQuarter) {
+    const next = ((info.qStartMonth - 1 + 3) % 12) + 1
+    if (next <= info.qStartMonth) startYear++
+    startMonth = next
+  }
+
+  return [0, 1, 2].map(offset => {
+    const rawIdx    = startMonth - 1 + offset
+    const year      = startYear + Math.floor(rawIdx / 12)
+    const monthIndex = rawIdx % 12   // 0-based JS month
+    const startDate = new Date(year, monthIndex, 1)
+    const endDate   = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999)
+    const isPast    = endDate < now
+    const isCurrent = now.getMonth() === monthIndex && now.getFullYear() === year
+    return {
+      label:      MONTH_NAMES[monthIndex],
+      short:      MONTH_SHORT[monthIndex],
+      monthIndex,
+      year,
+      startDate,
+      endDate,
+      isPast,
+      isCurrent,
+    }
+  })
+}
+
+// Returns true if deal.f_close_date falls within month.startDate..month.endDate.
+export function isCloseInMonth(deal, month) {
+  if (!deal.f_close_date) return false
+  const d = new Date(deal.f_close_date)
+  if (isNaN(d.getTime())) return false
+  return d >= month.startDate && d <= month.endDate
+}
+
+// Breaks down importedData by forecast category for each of the 3 quarter months.
+// Returns null if importedData is empty/null.
+export function calcMonthlyBreakdown(importedData, fyStartMonth = 1, isNextQuarter = false) {
+  if (!importedData?.length) return null
+  const months = getQuarterMonths(fyStartMonth, isNextQuarter)
+
+  return months.map(month => {
+    const inMonth = importedData.filter(d => isCloseInMonth(d, month))
+
+    const sumCat = (cat) => {
+      const matched = inMonth.filter(d => d.f_fc_cat_norm === cat)
+      return { amount: matched.reduce((s, d) => s + d.f_amount_num, 0), count: matched.length }
+    }
+
+    const closed     = sumCat('closed')
+    const worst_case = sumCat('worst_case')
+    const call       = sumCat('call')
+    const best_case  = sumCat('best_case')
+    const pipeline   = sumCat('pipeline')
+
+    const total       = closed.amount + worst_case.amount + call.amount + best_case.amount + pipeline.amount
+    const total_count = closed.count  + worst_case.count  + call.count  + best_case.count  + pipeline.count
+
+    return {
+      ...month,
+      closed:          closed.amount,     closed_count:     closed.count,
+      worst_case:      worst_case.amount, worst_case_count: worst_case.count,
+      call:            call.amount,       call_count:       call.count,
+      best_case:       best_case.amount,  best_case_count:  best_case.count,
+      pipeline:        pipeline.amount,   pipeline_count:   pipeline.count,
+      total,           total_count,
+    }
+  })
+}
+
 const DEFAULT_COL_MAP = {
   'Opportunity Name':         'f_opp_name',
   'Account Name':             'f_account',

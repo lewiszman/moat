@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 import { calcForecast } from '../lib/forecast'
-import { aggregateForecast, calcMonthlyClosedBreakdown } from '../lib/import'
+import { aggregateForecast, calcMonthlyClosedBreakdown, calcMonthlyBreakdown } from '../lib/import'
 import { getFiscalQuarterInfo, sellDaysRemaining, sellDaysInQuarter } from '../lib/fmt'
 
 // ── Snapshot key allowlist ─────────────────────────────────────
@@ -387,6 +387,13 @@ export const useDealBackStore = create(
       positions_q1:     {},
       cncOverrides_cq:  { opps: null, asp: null, rate: null },
       cncOverrides_q1:  { opps: null, asp: null, rate: null },
+      monthFilter_cq:   'all',
+      monthFilter_q1:   'all',
+
+      setMonthFilter: (filter) => set(s => {
+        const aq = useQuarterStore.getState().activeQuarter
+        s[`monthFilter_${aq}`] = filter
+      }),
 
       reset: () => set(s => {
         const aq = useQuarterStore.getState().activeQuarter
@@ -412,6 +419,7 @@ export const useDealBackStore = create(
       partialize: (s) => ({
         positions_cq: s.positions_cq, positions_q1: s.positions_q1,
         cncOverrides_cq: s.cncOverrides_cq, cncOverrides_q1: s.cncOverrides_q1,
+        monthFilter_cq: s.monthFilter_cq, monthFilter_q1: s.monthFilter_q1,
       }),
     }
   )
@@ -432,6 +440,10 @@ export const useWowStore = create(
         const qInfo      = getFiscalQuarterInfo('current', fs.fyStartMonth || 1)
         const qStartDate = new Date(qInfo.qStartYear, qInfo.qStartMonth - 1, 1)
         const weekInQ    = Math.floor((now - qStartDate) / (7 * 86400000)) + 1
+        const isNextQ = aq === 'q1'
+        const monthly = fs.importedData?.length
+          ? calcMonthlyBreakdown(fs.importedData, fs.fyStartMonth || 1, isNextQ)
+          : null
         s.snapshots.push({
           id: Date.now().toString(),
           week: weekInQ,
@@ -444,11 +456,7 @@ export const useWowStore = create(
           fc_best_case:  d.fc_best_case  || 0,
           pipeline: (fs.pipe_worst_case || 0) + (fs.pipe_call || 0) + (fs.pipe_best_case || 0) + (fs.pipe_pipe || 0),
           closed: fs.closed || 0,
-          monthly: {
-            m1: { closed: fs.m1_closed || 0, worst_case: fs.m1_worst_case || 0, call: fs.m1_call || 0, best_case: fs.m1_best_case || 0 },
-            m2: { closed: fs.m2_closed || 0, worst_case: fs.m2_worst_case || 0, call: fs.m2_call || 0, best_case: fs.m2_best_case || 0 },
-            m3: { closed: fs.m3_closed || 0, worst_case: fs.m3_worst_case || 0, call: fs.m3_call || 0, best_case: fs.m3_best_case || 0 },
-          },
+          monthly,
         })
       }),
 
