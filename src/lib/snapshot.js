@@ -1,6 +1,7 @@
 import { getCqState, getQ1State, useWowStore, useDealBackStore, useSectionComments, migrateSnapshot } from '../store/forecastStore'
 import { useVocabStore, useCatMapStore } from './vocab'
 import { sanitizeSnapshot } from './supabase'
+import { useCoverageStore } from '../store/coverageStore'
 
 // Keys snapshotted per-quarter
 const FORECAST_SNAP_KEYS = [
@@ -37,6 +38,8 @@ export function buildSnapshot() {
     if (raw) importMeta = JSON.parse(raw)
   } catch {}
 
+  const coverage = useCoverageStore.getState()
+
   return sanitizeSnapshot({
     cq:       pickForecast(cq),
     q1:       pickForecast(q1),
@@ -53,6 +56,7 @@ export function buildSnapshot() {
     sectionComments: sc.comments,
     vocab:    vocab.vocab,
     catMap:   catMapS.catMap,
+    coverage: { channels: coverage.channels },
     importMeta,
   })
 }
@@ -91,6 +95,10 @@ export function applySnapshot(snap) {
 
   if (snap.catMap) {
     useCatMapStore.setState({ catMap: snap.catMap })
+  }
+
+  if (snap.coverage?.channels) {
+    useCoverageStore.setState({ channels: snap.coverage.channels })
   }
 
   if (snap.importMeta) {

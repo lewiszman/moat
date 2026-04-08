@@ -488,7 +488,7 @@ function FeedbackForm() {
   const handleSend = () => {
     if (!message.trim()) return
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    const body  = `${message}\n\n---\nVersion: v3.1 | ${today}`
+    const body  = `${message}\n\n---\nVersion: v3.2 | ${today}`
     const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
     window.location.href = href
     setSent(true)
@@ -536,9 +536,22 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
+    version: 'v3.2',
+    date: 'Apr 2026',
+    current: true,
+    items: [
+      ['Pipeline Coverage Model', 'New tab showing gap to quota, pipeline needed per channel, and full activity funnel (activities → connects → meetings → opps → pipeline)'],
+      ['Three channels', 'SDR Inbound, SDR Outbound, AE Outbound — each with independent ASP, win rate, and funnel conversion rates'],
+      ['Per-channel gap allocation', 'User-allocated gap % per channel with slider controls and 100% validation'],
+      ['Full funnel outputs', 'Total and weekly run rate for each stage: pipeline, opps, meetings, connects, activities'],
+      ['Funnel assumptions panel', 'Collapsible table to edit all conversion rates in one place'],
+      ['Persisted', 'Coverage settings saved to localStorage (moat-coverage-v1) and included in Supabase snapshots'],
+    ],
+  },
+  {
     version: 'v3.1',
     date: 'Mar 2026',
-    current: true,
+    current: false,
     items: [
       ['Forecast categories renamed', 'Commit → Worst Case, Probable → Call, Upside → Best Case; Pipeline unchanged — applied across store fields, localStorage keys, Supabase snapshots, Slack output, and all UI labels'],
       ['Legacy SFDC CSV import', 'Old "Commit", "Probable", "Upside" values from Salesforce exports continue to map correctly via normalizeFcCat()'],
@@ -653,7 +666,7 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v3.1'],
+            ['Version', 'v3.2'],
             ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],

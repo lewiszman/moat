@@ -27,6 +27,15 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: 'coverage',
+    label: 'Coverage',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 3.5h13M3 7.5h9M5.5 11.5h4"/>
+      </svg>
+    ),
+  },
+  {
     id: 'dealback',
     label: 'Deal-Backing',
     icon: (
