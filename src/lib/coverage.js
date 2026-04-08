@@ -13,24 +13,25 @@ export function calcChannelModel(channel, channelGap, weeksRemaining) {
   const safeDiv = (n, d) => (d > 0 ? n / d : 0)
   const wks = Math.max(1, weeksRemaining)
 
+  // Activity → Meeting → Opp → SAA (qualified opp) → Pipeline
   const pipeline_needed   = safeDiv(channelGap, channel.win_rate / 100)
-  const opps_needed       = safeDiv(pipeline_needed, channel.asp)
+  const saas_needed       = safeDiv(pipeline_needed, channel.asp)
+  const opps_needed       = safeDiv(saas_needed, channel.opp_to_saa / 100)
   const meetings_needed   = safeDiv(opps_needed, channel.meeting_to_opp / 100)
-  const connects_needed   = safeDiv(meetings_needed, channel.connect_to_meeting / 100)
-  const activities_needed = safeDiv(connects_needed, channel.activity_to_connect / 100)
+  const activities_needed = safeDiv(meetings_needed, channel.activity_to_meeting / 100)
 
   return {
     channelGap,
     pipeline_needed,
+    saas_needed:       Math.round(saas_needed),
     opps_needed:       Math.round(opps_needed),
     meetings_needed:   Math.round(meetings_needed),
-    connects_needed:   Math.round(connects_needed),
     activities_needed: Math.round(activities_needed),
 
     pipeline_per_week:    pipeline_needed / wks,
+    saas_per_week:        saas_needed / wks,
     opps_per_week:        opps_needed / wks,
     meetings_per_week:    meetings_needed / wks,
-    connects_per_week:    connects_needed / wks,
     activities_per_week:  activities_needed / wks,
   }
 }

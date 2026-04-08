@@ -3,9 +3,9 @@ import { useCoverageStore } from '../../store/coverageStore'
 import { parseMoney } from '../../lib/fmt'
 
 const RATE_ROWS = [
-  { label: 'Activity → Connect %', field: 'activity_to_connect' },
-  { label: 'Connect → Meeting %',  field: 'connect_to_meeting'  },
+  { label: 'Activity → Meeting %', field: 'activity_to_meeting' },
   { label: 'Meeting → Opp %',      field: 'meeting_to_opp'      },
+  { label: 'Opp → SAA %',          field: 'opp_to_saa'          },
 ]
 
 export default function FunnelRates() {

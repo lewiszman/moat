@@ -2,13 +2,13 @@ import React from 'react'
 import { useCoverageStore } from '../../store/coverageStore'
 import { fmt, parseMoney } from '../../lib/fmt'
 
-// Funnel stage config — label, value key, per-week key, color
+// Funnel stage config — Activity → Meeting → Opp → SAA → Pipeline
 const STAGES = [
-  { label: 'Pipeline needed',   key: 'pipeline_needed',   weekKey: 'pipeline_per_week',   color: '#1a56db', isPipeline: true },
-  { label: 'Opps needed',       key: 'opps_needed',       weekKey: 'opps_per_week',       color: '#1a56db' },
-  { label: 'Meetings needed',   key: 'meetings_needed',   weekKey: 'meetings_per_week',   color: '#0d7c3d' },
-  { label: 'Connects needed',   key: 'connects_needed',   weekKey: 'connects_per_week',   color: '#b45309' },
-  { label: 'Activities needed', key: 'activities_needed', weekKey: 'activities_per_week', color: '#dc2626' },
+  { label: 'Pipeline needed',      key: 'pipeline_needed',   weekKey: 'pipeline_per_week',   color: '#1a56db', isPipeline: true },
+  { label: 'SAAs needed',          key: 'saas_needed',       weekKey: 'saas_per_week',       color: '#1a56db' },
+  { label: 'Opps needed',          key: 'opps_needed',       weekKey: 'opps_per_week',       color: '#0d7c3d' },
+  { label: 'Meetings needed',      key: 'meetings_needed',   weekKey: 'meetings_per_week',   color: '#b45309' },
+  { label: 'Activities needed',    key: 'activities_needed', weekKey: 'activities_per_week', color: '#dc2626' },
 ]
 
 function NumInput({ value, onChange, prefix, suffix, className = '' }) {
