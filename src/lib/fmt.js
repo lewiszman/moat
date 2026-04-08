@@ -60,6 +60,16 @@ export const sellDaysInQuarter = (from, to) => {
   return count
 }
 
+// sellDaysFrom — inclusive of 'from', identical to sellDaysInQuarter.
+export const sellDaysFrom = (from, to) => sellDaysInQuarter(from, to)
+
+// Total sell days in a quarter (qStart to qEnd inclusive).
+export const totalSellDaysInQuarter = (qStart, qEnd) => sellDaysFrom(qStart, qEnd)
+
+// Weeks elapsed from quarter start to 'today' (inclusive). Not clamped.
+export const sellWeeksElapsed = (qStart, today) =>
+  Math.ceil(sellDaysFrom(qStart, today) / 5)
+
 export const sellDaysRemaining = (from, qEnd) => {
   let count = 0
   const d = new Date(from)
