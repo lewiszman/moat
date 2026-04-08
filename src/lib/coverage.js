@@ -44,10 +44,9 @@ export function calcChannelModel(channel, channelGap, weeksRemaining) {
  * @param {number} weeksRemaining  Selling weeks left
  * @returns {object}
  */
-export function calcCoverageModel(channels, quota, fc_call, weeksRemaining) {
+export function calcCoverageModel(channels, quota, fc_call, weeksRemaining, gapOverride = null) {
   const rawGap = Math.max(0, quota - fc_call)
-  // Use quota as a floor so the model always shows meaningful activity targets
-  const gap = rawGap > 0 ? rawGap : 0
+  const gap = gapOverride !== null ? Math.max(0, gapOverride) : rawGap
 
   const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
   const totalAllocation = enabledKeys.reduce((s, k) => s + channels[k].allocation, 0)

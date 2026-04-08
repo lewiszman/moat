@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useRef } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
 import { useCoverageStore } from '../../store/coverageStore'
 import { calcCoverageModel } from '../../lib/coverage'
@@ -63,10 +63,33 @@ function AllocationRow({ channelKey, channel, disabled }) {
 }
 
 // ── Gap summary bar ────────────────────────────────────────────
-function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total }) {
-  const gap     = Math.max(0, quota - fc_call)
-  const overage = Math.max(0, fc_call - quota)
-  const onTrack = fc_call >= quota
+function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total, gapOverride, onGapChange }) {
+  const autoGap   = Math.max(0, quota - fc_call)
+  const overage   = Math.max(0, fc_call - quota)
+  const onTrack   = fc_call >= quota
+  const isOverride = gapOverride !== null
+  const displayGap = isOverride ? gapOverride : autoGap
+
+  const [editing, setEditing] = useState(false)
+  const [draft,   setDraft]   = useState('')
+  const inputRef = useRef(null)
+
+  const startEdit = () => {
+    setDraft(String(Math.round(displayGap)))
+    setEditing(true)
+    setTimeout(() => inputRef.current?.select(), 0)
+  }
+
+  const commit = () => {
+    const v = parseMoney(draft)
+    onGapChange(isNaN(v) ? null : Math.max(0, v))
+    setEditing(false)
+  }
+
+  const reset = () => {
+    onGapChange(null)
+    setEditing(false)
+  }
 
   return (
     <div className="card overflow-hidden mb-4">
@@ -83,17 +106,69 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total }) {
           <div className="text-[20px] font-[700] text-[var(--tx)]">{fmt(fc_call)}</div>
         </div>
 
-        {/* Gap */}
+        {/* Gap — editable */}
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Gap</div>
-          {onTrack ? (
-            <>
-              <div className="text-[16px] font-[700] text-[#059669]">On track</div>
-              <div className="text-[11px] text-[#059669]">+{fmt(overage)} above quota</div>
-            </>
+          <div className="flex items-center gap-1.5 mb-0.5">
+            <span className="text-[11px] text-[var(--tx2)]">Gap</span>
+            {isOverride && (
+              <span className="text-[9px] font-[700] uppercase tracking-wider px-1.5 py-px rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                override
+              </span>
+            )}
+          </div>
+
+          {editing ? (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[var(--tx2)] text-[14px]">$</span>
+              <input
+                ref={inputRef}
+                type="text"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false) } }}
+                className="w-28 text-[18px] font-[700] bg-transparent border-b-2 border-[var(--blue)] outline-none"
+              />
+            </div>
           ) : (
-            <div className="text-[20px] font-[700] text-[#dc2626]">{fmt(gap)}</div>
+            <div className="flex items-end gap-2">
+              <div
+                className={`text-[20px] font-[700] cursor-pointer hover:opacity-70 transition-opacity ${isOverride ? 'text-amber-600' : onTrack ? 'text-[#059669]' : 'text-[#dc2626]'}`}
+                onClick={startEdit}
+                title="Click to override gap"
+              >
+                {onTrack && !isOverride ? 'On track' : fmt(displayGap)}
+              </div>
+            </div>
           )}
+
+          <div className="flex items-center gap-2 mt-0.5">
+            {!editing && !isOverride && (
+              <button
+                onClick={startEdit}
+                className="text-[10px] text-[var(--tx2)] hover:text-[var(--blue)] underline cursor-pointer bg-transparent border-none"
+              >
+                override
+              </button>
+            )}
+            {isOverride && !editing && (
+              <>
+                <button
+                  onClick={startEdit}
+                  className="text-[10px] text-[var(--tx2)] hover:text-[var(--blue)] underline cursor-pointer bg-transparent border-none"
+                >
+                  edit
+                </button>
+                <span className="text-[10px] text-[var(--tx2)]">·</span>
+                <button
+                  onClick={reset}
+                  className="text-[10px] text-[var(--tx2)] hover:text-[#dc2626] underline cursor-pointer bg-transparent border-none"
+                >
+                  reset to {fmt(autoGap)}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Weeks */}
@@ -106,8 +181,15 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total }) {
         </div>
       </div>
 
-      {/* On-track note */}
-      {onTrack && (
+      {/* On-track / override note */}
+      {isOverride ? (
+        <div className="px-4 py-2 bg-amber-50 border-t border-amber-100 text-[11px] text-amber-700">
+          Gap overridden to <strong>{fmt(gapOverride)}</strong> — auto gap from walk-up is <strong>{fmt(autoGap)}</strong>.{' '}
+          <button onClick={reset} className="underline cursor-pointer bg-transparent border-none text-amber-700 hover:text-amber-900">
+            Reset to walk-up
+          </button>
+        </div>
+      ) : onTrack && (
         <div className="px-4 py-2 bg-green-50 border-t border-green-100 text-[11px] text-green-700">
           Call FC exceeds quota by <strong>{fmt(overage)}</strong> — model below shows activity needed to maintain pipeline coverage for the remainder of the quarter.
         </div>
@@ -165,12 +247,14 @@ export default function CoverageView() {
   const weeks_total    = derived.weeks_total    || 0
 
   const channels        = useCoverageStore(s => s.channels)
-  const setChannelField = useCoverageStore(s => s.setChannelField)
 
   const channelKeys = Object.keys(channels)
 
-  // Compute model
-  const model = calcCoverageModel(channels, quota, fc_call, weeksRemaining)
+  // Gap override — null means use auto (quota - fc_call)
+  const [gapOverride, setGapOverride] = useState(null)
+
+  // Compute model — pass override when set
+  const model = calcCoverageModel(channels, quota, fc_call, weeksRemaining, gapOverride)
 
   // Allocation validation
   const enabledKeys = channelKeys.filter(k => channels[k].enabled)
@@ -193,6 +277,8 @@ export default function CoverageView() {
         fc_call={fc_call}
         weeksRemaining={weeksRemaining}
         weeks_total={weeks_total}
+        gapOverride={gapOverride}
+        onGapChange={setGapOverride}
       />
 
       {/* Allocation controls */}
