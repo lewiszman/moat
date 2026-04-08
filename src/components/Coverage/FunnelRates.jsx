@@ -3,9 +3,9 @@ import { useCoverageStore } from '../../store/coverageStore'
 import { parseMoney } from '../../lib/fmt'
 
 const RATE_ROWS = [
-  { label: 'Activity → Meeting %', field: 'activity_to_meeting' },
-  { label: 'Meeting → Opp %',      field: 'meeting_to_opp'      },
-  { label: 'Opp → SAA %',          field: 'opp_to_saa'          },
+  { label: 'Activities per meeting', field: 'activity_to_meeting', isRatio: true, max: 100 },
+  { label: 'Meeting → Opp %',        field: 'meeting_to_opp',      isRatio: false, max: 100 },
+  { label: 'Opp → SAA %',            field: 'opp_to_saa',          isRatio: false, max: 100 },
 ]
 
 export default function FunnelRates() {
@@ -68,12 +68,16 @@ export default function FunnelRates() {
                           <input
                             type="text"
                             value={channels[k][row.field]}
-                            onChange={e =>
-                              setChannelField(k, row.field, Math.min(100, Math.max(0, parseMoney(e.target.value))))
-                            }
+                            onChange={e => {
+                              const v = parseMoney(e.target.value)
+                              const clamped = row.isRatio
+                                ? Math.max(1, Math.round(v))
+                                : Math.min(100, Math.max(0, v))
+                              setChannelField(k, row.field, clamped)
+                            }}
                             className="w-14 text-[13px] font-[600] text-center bg-transparent border border-[var(--bdr2)] rounded px-1.5 py-1 focus:border-[var(--blue)] outline-none"
                           />
-                          <span className="text-[var(--tx2)]">%</span>
+                          {!row.isRatio && <span className="text-[var(--tx2)]">%</span>}
                         </div>
                       </td>
                     ))}

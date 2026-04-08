@@ -18,7 +18,8 @@ export function calcChannelModel(channel, channelGap, weeksRemaining) {
   const saas_needed       = safeDiv(pipeline_needed, channel.asp)
   const opps_needed       = safeDiv(saas_needed, channel.opp_to_saa / 100)
   const meetings_needed   = safeDiv(opps_needed, channel.meeting_to_opp / 100)
-  const activities_needed = safeDiv(meetings_needed, channel.activity_to_meeting / 100)
+  // activity_to_meeting = # of activities required to book 1 meeting (ratio, not %)
+  const activities_needed = meetings_needed * Math.max(1, channel.activity_to_meeting)
 
   return {
     channelGap,

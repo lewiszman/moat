@@ -9,7 +9,7 @@ const DEFAULT_CHANNELS = {
     allocation:          40,
     asp:                 20000,
     win_rate:            20,
-    activity_to_meeting: 8,
+    activity_to_meeting: 15,   // activities needed to book 1 meeting
     meeting_to_opp:      30,
     opp_to_saa:          60,
     headcount:           2,
@@ -20,7 +20,7 @@ const DEFAULT_CHANNELS = {
     allocation:          40,
     asp:                 22000,
     win_rate:            18,
-    activity_to_meeting: 5,
+    activity_to_meeting: 20,   // activities needed to book 1 meeting
     meeting_to_opp:      25,
     opp_to_saa:          55,
     headcount:           2,
@@ -31,7 +31,7 @@ const DEFAULT_CHANNELS = {
     allocation:          20,
     asp:                 28000,
     win_rate:            25,
-    activity_to_meeting: 12,
+    activity_to_meeting: 10,   // activities needed to book 1 meeting
     meeting_to_opp:      40,
     opp_to_saa:          65,
     headcount:           4,
@@ -56,7 +56,7 @@ export const useCoverageStore = create(
         set(s => { s.channels = structuredClone(DEFAULT_CHANNELS) }),
     })),
     {
-      name:    'moat-coverage-v2',
+      name:    'moat-coverage-v3',
       storage: createJSONStorage(() => localStorage),
     }
   )

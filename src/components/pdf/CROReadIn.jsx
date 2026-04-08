@@ -415,7 +415,7 @@ function CROReadInDocument({ data }) {
         <Text style={S.footnote}>
           {'Rates: ' + enabledKeys.map(k => {
             const ch = channels[k]
-            return `${ch.label} ${fmtM(ch.asp)} ASP \u00B7 ${ch.win_rate}% win \u00B7 ${ch.activity_to_meeting}% act\u2192mtg \u00B7 ${ch.meeting_to_opp}% mtg\u2192opp \u00B7 ${ch.opp_to_saa}% opp\u2192saa`
+            return `${ch.label} ${fmtM(ch.asp)} ASP \u00B7 ${ch.win_rate}% win \u00B7 ${ch.activity_to_meeting} act/mtg \u00B7 ${ch.meeting_to_opp}% mtg\u2192opp \u00B7 ${ch.opp_to_saa}% opp\u2192saa`
           }).join('   |   ')}
         </Text>
 
