@@ -5,6 +5,7 @@ import { useDarkMode } from '../../hooks/useDarkMode'
 import AuthButton from './AuthButton'
 import SessionHistory from './SessionHistory'
 import { exportForecastPDF, exportInspectionPDF } from '../../lib/exportPdf.jsx'
+import { exportCROPDF } from '../pdf/CROReadIn.jsx'
 
 const VIEW_LABELS = {
   manager: 'Manager Walk-Up',
@@ -22,9 +23,13 @@ export default function Topbar() {
   const saveSnapshot = useSessionStore(s => s.saveSnapshot)
   const saving      = useSessionStore(s => s.saving)
 
-  const [promptOpen, setPromptOpen]   = useState(false)
-  const [snapLabel, setSnapLabel]     = useState('')
-  const [pdfLoading, setPdfLoading]   = useState(false)
+  const quota        = useForecastStore(s => s.quota)
+  const quarterLabel = useForecastStore(s => s.quarterLabel)
+
+  const [promptOpen, setPromptOpen]     = useState(false)
+  const [snapLabel, setSnapLabel]       = useState('')
+  const [pdfLoading, setPdfLoading]     = useState(false)
+  const [croPdfLoading, setCroPdfLoading] = useState(false)
   const [nudgeDismissed, setNudgeDismissed] = useState(
     () => !!sessionStorage.getItem('moat-nudge-dismissed')
   )
@@ -90,6 +95,30 @@ export default function Topbar() {
             {pdfLoading ? 'Generating…' : activeView === 'inspector' ? 'Export PDF' : 'Download PDF'}
           </button>
         )}
+
+        {/* CRO Read-In PDF — always visible, disabled when quota or label not set */}
+        {(() => {
+          const disabled = croPdfLoading || !quota || !quarterLabel
+          const tooltip  = !quota ? 'Set quota in Manager Walk-Up'
+            : !quarterLabel ? 'Set quarter label in Manager Walk-Up'
+            : undefined
+          return (
+            <button
+              onClick={async () => {
+                setCroPdfLoading(true)
+                try { await exportCROPDF() } finally { setCroPdfLoading(false) }
+              }}
+              disabled={disabled}
+              title={tooltip}
+              className="btn text-[11px] flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <svg width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+              </svg>
+              {croPdfLoading ? 'Generating…' : 'CRO PDF'}
+            </button>
+          )
+        })()}
 
         <button
           onClick={() => setDark(!dark)}
