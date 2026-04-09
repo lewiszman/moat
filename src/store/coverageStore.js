@@ -2,38 +2,32 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
 
+// activity_to_meeting stored as a ratio (1/activitiesPerMeeting).
+// e.g. 500 activities per meeting → stored as 0.002 = 1/500.
+// Display in UI: Math.round(1 / activity_to_meeting) → 500.
+// Convert on write: 1 / displayValue → 0.002.
+
 const DEFAULT_CHANNELS = {
-  sdr_inbound: {
-    label:               'SDR Inbound',
+  sdr: {
+    label:               'SDR',
     enabled:             true,
-    allocation:          40,
+    allocation:          50,
     asp:                 20000,
-    win_rate:            20,
-    activity_to_meeting: 15,   // activities needed to book 1 meeting
-    meeting_to_opp:      30,
-    opp_to_saa:          60,
-    headcount:           2,
-  },
-  sdr_outbound: {
-    label:               'SDR Outbound',
-    enabled:             true,
-    allocation:          40,
-    asp:                 22000,
     win_rate:            18,
-    activity_to_meeting: 20,   // activities needed to book 1 meeting
-    meeting_to_opp:      25,
-    opp_to_saa:          55,
+    activity_to_meeting: 0.002,   // ratio: 1/500 (500 activities per meeting)
+    meeting_to_opp:      100,
+    opp_to_saa:          50,
     headcount:           2,
   },
-  ae_outbound: {
-    label:               'AE Outbound',
+  ae: {
+    label:               'AE',
     enabled:             true,
-    allocation:          20,
+    allocation:          50,
     asp:                 28000,
     win_rate:            25,
-    activity_to_meeting: 10,   // activities needed to book 1 meeting
-    meeting_to_opp:      40,
-    opp_to_saa:          65,
+    activity_to_meeting: 0.002,   // ratio: 1/500 (500 activities per meeting)
+    meeting_to_opp:      100,
+    opp_to_saa:          50,
     headcount:           4,
   },
 }
@@ -63,7 +57,7 @@ export const useCoverageStore = create(
         set(s => { s.gapOverride = null }),
     })),
     {
-      name:    'moat-coverage-v3',
+      name:    'moat-coverage-v4',   // bumped to force fresh two-channel defaults
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         channels:    s.channels,

@@ -18,22 +18,32 @@ export function calcChannelModel(channel, channelGap, weeksRemaining) {
   const saas_needed       = safeDiv(pipeline_needed, channel.asp)
   const opps_needed       = safeDiv(saas_needed, channel.opp_to_saa / 100)
   const meetings_needed   = safeDiv(opps_needed, channel.meeting_to_opp / 100)
-  // activity_to_meeting = # of activities required to book 1 meeting (ratio, not %)
-  const activities_needed = meetings_needed * Math.max(1, channel.activity_to_meeting)
+  // activity_to_meeting is a ratio (1/activitiesPerMeeting), e.g. 0.002 = 1/500
+  // activities = meetings / ratio  →  meetings / 0.002 = meetings × 500
+  const activities_needed = channel.activity_to_meeting > 0
+    ? meetings_needed / channel.activity_to_meeting
+    : 0
+
+  // Per-AE breakdown (headcount-adjusted)
+  const hc                         = Math.max(1, channel.headcount || 1)
+  const activities_per_ae          = activities_needed / hc
+  const activities_per_ae_per_week = activities_per_ae / wks
 
   return {
     channelGap,
     pipeline_needed,
-    saas_needed:       Math.round(saas_needed),
-    opps_needed:       Math.round(opps_needed),
-    meetings_needed:   Math.round(meetings_needed),
-    activities_needed: Math.round(activities_needed),
+    saas_needed:              Math.round(saas_needed),
+    opps_needed:              Math.round(opps_needed),
+    meetings_needed:          Math.round(meetings_needed),
+    activities_needed:        Math.round(activities_needed),
+    activities_per_ae:        Math.round(activities_per_ae),
 
-    pipeline_per_week:    pipeline_needed / wks,
-    saas_per_week:        saas_needed / wks,
-    opps_per_week:        opps_needed / wks,
-    meetings_per_week:    meetings_needed / wks,
-    activities_per_week:  activities_needed / wks,
+    pipeline_per_week:            pipeline_needed / wks,
+    saas_per_week:                saas_needed / wks,
+    opps_per_week:                opps_needed / wks,
+    meetings_per_week:            meetings_needed / wks,
+    activities_per_week:          activities_needed / wks,
+    activities_per_ae_per_week,
   }
 }
 

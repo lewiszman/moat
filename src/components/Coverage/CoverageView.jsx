@@ -102,14 +102,15 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total, gapOverrid
 
         {/* Call FC */}
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Bookings from Entering Pipeline</div>
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Bookings from Entering Pipeline &amp; IQP</div>
           <div className="text-[20px] font-[700] text-[var(--tx)]">{fmt(fc_call)}</div>
+          <div className="text-[10px] text-[var(--tx2)] mt-0.5">Expected bookings from pipeline entering the funnel this quarter plus C&amp;C (IQP)</div>
         </div>
 
         {/* Gap — editable */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-[11px] text-[var(--tx2)]">Bookings Gap from IQP</span>
+            <span className="text-[11px] text-[var(--tx2)]">Bookings Gap</span>
             {isOverride && (
               <span className="text-[9px] font-[700] uppercase tracking-wider px-1.5 py-px rounded-full bg-amber-100 text-amber-700 border border-amber-200">
                 override
@@ -199,9 +200,10 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total, gapOverrid
 }
 
 // ── Total summary ──────────────────────────────────────────────
-function TotalSummary({ model }) {
+function TotalSummary({ model, channels }) {
   if (!model) return null
   const { totalPipelineNeeded, totalActivitiesNeeded, totalPipelinePerWeek, totalActivitiesPerWeek } = model
+  const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
 
   return (
     <div className="card overflow-hidden mt-4">
@@ -233,6 +235,18 @@ function TotalSummary({ model }) {
         <strong className="text-[var(--tx)]">Pipeline: {fmt(Math.round(totalPipelinePerWeek / 1000) * 1000)}/wk</strong>
         {' · '}
         <strong className="text-[var(--tx)]">Activities: {totalActivitiesPerWeek.toLocaleString()}/wk</strong>
+        {enabledKeys.map(k => {
+          const ch = channels[k]
+          const chModel = model.channels[k] || {}
+          const perAeWk = Math.ceil(chModel.activities_per_ae_per_week || 0)
+          if (!perAeWk) return null
+          return (
+            <span key={k}>
+              {' · '}
+              <strong className="text-[var(--tx)]">Acts/AE ({ch.label}): {perAeWk}/wk</strong>
+            </span>
+          )
+        })}
       </div>
     </div>
   )
@@ -317,7 +331,7 @@ export default function CoverageView() {
       {/* Channel cards */}
       {allocValid ? (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             {enabledKeys.map(k => (
               <ChannelCard
                 key={k}
@@ -329,7 +343,7 @@ export default function CoverageView() {
             ))}
           </div>
 
-          <TotalSummary model={model} />
+          <TotalSummary model={model} channels={channels} />
         </>
       ) : (
         <div className="card px-4 py-8 text-center text-[13px] text-[var(--tx2)]">

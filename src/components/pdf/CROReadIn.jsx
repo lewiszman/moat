@@ -25,11 +25,12 @@ const C = {
 
 // ── Coverage stage config ──────────────────────────────────────
 const COV_STAGES = [
-  { label: 'Pipeline needed',   key: 'pipeline_needed',   wk: 'pipeline_per_week',   color: C.blue,  isPipe: true },
-  { label: 'SAAs needed',       key: 'saas_needed',       wk: 'saas_per_week',       color: C.blue },
-  { label: 'Opps needed',       key: 'opps_needed',       wk: 'opps_per_week',       color: '#0d7c3d' },
-  { label: 'Meetings needed',   key: 'meetings_needed',   wk: 'meetings_per_week',   color: C.amber },
-  { label: 'Activities needed', key: 'activities_needed', wk: 'activities_per_week', color: C.coral },
+  { label: 'Pipeline needed',   key: 'pipeline_needed',   wk: 'pipeline_per_week',           color: C.blue,    isPipe: true },
+  { label: 'SAAs needed',       key: 'saas_needed',       wk: 'saas_per_week',               color: C.blue },
+  { label: 'Opps needed',       key: 'opps_needed',       wk: 'opps_per_week',               color: '#0d7c3d' },
+  { label: 'Meetings needed',   key: 'meetings_needed',   wk: 'meetings_per_week',           color: C.amber },
+  { label: 'Activities needed', key: 'activities_needed', wk: 'activities_per_week',         color: C.coral },
+  { label: 'Activities/AE',     key: 'activities_per_ae', wk: 'activities_per_ae_per_week',  color: C.coral,   isPerAE: true },
 ]
 
 // ── Styles ─────────────────────────────────────────────────────
@@ -580,8 +581,10 @@ function CROReadInDocument({ data }) {
           </View>
 
           {COV_STAGES.map((stage, i) => {
-            const total   = enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.key] || 0), 0)
-            const totalWk = enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.wk]  || 0), 0)
+            const total   = stage.isPerAE
+              ? null
+              : enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.key] || 0), 0)
+            const totalWk = enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.wk] || 0), 0)
             const fmtVal  = (v) => stage.isPipe ? fmtM(v) : fmtN(v)
             const fmtWk   = (v) => stage.isPipe
               ? `${fmtM(Math.round(v / 1000) * 1000)}/wk`
@@ -594,7 +597,7 @@ function CROReadInDocument({ data }) {
                     {fmtVal((coverage.channels[k] || {})[stage.key] || 0)}
                   </Text>
                 ))}
-                <Text style={[S.tdRB, { flex: 1.4 }]}>{fmtVal(total)}</Text>
+                <Text style={[S.tdRB, { flex: 1.4 }]}>{total !== null ? fmtVal(total) : '\u2014'}</Text>
                 <Text style={[S.tdRB, { flex: 1.6, color: stage.color }]}>{fmtWk(totalWk)}</Text>
               </View>
             )
@@ -605,7 +608,8 @@ function CROReadInDocument({ data }) {
         <Text style={S.footnote}>
           {'Rates: ' + enabledKeys.map(k => {
             const ch = channels[k]
-            return `${ch.label} ${fmtM(ch.asp)} ASP \u00B7 ${ch.win_rate}% win \u00B7 ${ch.activity_to_meeting} act/mtg \u00B7 ${ch.meeting_to_opp}% mtg\u2192opp \u00B7 ${ch.opp_to_saa}% opp\u2192saa`
+            const actsPerMtg = ch.activity_to_meeting > 0 ? Math.round(1 / ch.activity_to_meeting) : 0
+            return `${ch.label} ${fmtM(ch.asp)} ASP \u00B7 ${ch.win_rate}% win \u00B7 ${actsPerMtg} acts/mtg \u00B7 ${ch.meeting_to_opp}% mtg\u2192opp \u00B7 ${ch.opp_to_saa}% opp\u2192SAA \u00B7 ${ch.headcount || 1} AEs`
           }).join('   |   ')}
         </Text>
 
