@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import { useForecastStore } from '../../store/forecastStore'
 import { useVocabStore } from '../../lib/vocab'
-import { fmt, attPct, attVar, cl } from '../../lib/fmt'
+import { fmt, attPct, attVar, cl, parseMoney } from '../../lib/fmt'
 
 const CARDS_META = [
   { id: 'worst_case', color: '#1a56db', dot: '#1a56db' },
@@ -72,11 +72,18 @@ function QuotaBar({ quota, closed, bk_wc, bk_call, cnc_prorated, bk_bc, fc_best_
   )
 }
 
-function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleEl }) {
+function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleEl,
+                  overrideValue, onSetOverride, onClearOverride }) {
   const ap = attPct(fc, quota)
-  const ac = attVar(fc, quota)
   const prevFcRef = useRef(fc)
-  const [flash, setFlash] = useState(false)
+  const [flash, setFlash]     = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [inputVal, setInputVal] = useState('')
+
+  const overrideActive = overrideValue !== null && overrideValue > 0
+  const displayFc  = overrideActive ? overrideValue : fc
+  const displayAp  = attPct(displayFc, quota)
+  const displayAc  = attVar(displayFc, quota)
 
   React.useEffect(() => {
     if (prevFcRef.current !== fc && prevFcRef.current !== 0) {
@@ -87,6 +94,36 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
     prevFcRef.current = fc
   }, [fc])
 
+  // Sync inputVal when override changes externally (snapshot restore / clear all)
+  React.useEffect(() => {
+    if (overrideActive) {
+      setInputVal(String(overrideValue))
+    } else {
+      setInputVal('')
+      setEditOpen(false)
+    }
+  }, [overrideValue]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleIconClick = (e) => {
+    e.stopPropagation()
+    if (overrideActive) {
+      onClearOverride()
+    } else {
+      setEditOpen(o => !o)
+    }
+  }
+
+  const handleCommit = () => {
+    const v = parseMoney(inputVal)
+    if (v > 0) {
+      onSetOverride(v)
+      setEditOpen(false)
+    } else {
+      setInputVal('')
+      if (!overrideActive) setEditOpen(false)
+    }
+  }
+
   return (
     <div
       className={`
@@ -94,30 +131,78 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
         cursor-pointer select-none transition-colors duration-100
         hover:bg-[var(--bg2)] bg-[var(--bg)]
       `}
+      style={overrideActive ? { borderLeft: '2px solid var(--amber)' } : undefined}
       onClick={onToggle}
     >
       <div className="px-5 pt-5 pb-4">
-        {/* Tier label */}
+        {/* Tier label + pencil/clear icon */}
         <div className="flex items-center gap-2 mb-3">
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: meta.dot }} />
           <span className="text-[10px] font-[700] uppercase tracking-widest" style={{ color: meta.color }}>
             {meta.label}
           </span>
+          <button
+            onClick={handleIconClick}
+            className={`ml-auto text-[13px] border-none bg-transparent cursor-pointer p-0.5 rounded hover:opacity-70 leading-none ${
+              overrideActive ? 'text-[var(--amber)]' : 'text-[var(--tx2)]'
+            }`}
+            title={overrideActive ? 'Clear override' : 'Override for submission'}
+          >
+            {overrideActive || editOpen ? '✕' : '✎'}
+          </button>
         </div>
 
-        {/* Amount */}
+        {/* Primary amount */}
         <div
           className={`text-[28px] font-[700] leading-none mb-1 ${flash ? 'fc-amount-updated' : ''}`}
-          style={{ color: ac }}
+          style={{ color: displayAc }}
         >
-          {fmt(fc)}
+          {fmt(displayFc)}
         </div>
+        {/* Struck-through model value when override active */}
+        {overrideActive && (
+          <div className="text-[11px] text-[var(--tx2)] line-through mb-0.5">
+            {fmt(fc)} model
+          </div>
+        )}
+
+        {/* Override input */}
+        {(editOpen || overrideActive) && (
+          <div
+            className="flex items-center gap-1 mt-1 mb-1"
+            onClick={e => e.stopPropagation()}
+          >
+            <span className="text-[11px] text-[var(--tx2)]">$</span>
+            <input
+              autoFocus={editOpen && !overrideActive}
+              type="text"
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+              onBlur={handleCommit}
+              onKeyDown={e => {
+                if (e.key === 'Enter')  { handleCommit() }
+                if (e.key === 'Escape') { setInputVal(''); setEditOpen(false) }
+              }}
+              placeholder="Submit override"
+              className="w-28 text-[12px] font-[600] px-1.5 py-0.5 rounded border border-[var(--amber)] bg-transparent text-[var(--tx)] outline-none focus:border-[var(--amber)]"
+            />
+            {overrideActive && (
+              <button
+                onClick={e => { e.stopPropagation(); onClearOverride(); setInputVal('') }}
+                className="text-[11px] text-[var(--tx2)] hover:text-[var(--tx)] border-none bg-transparent cursor-pointer p-0 leading-none"
+                title="Clear override"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Attainment */}
         <div className="flex items-baseline gap-2 mb-2">
-          <span className="text-[20px] font-[600]" style={{ color: ac }}>{ap}%</span>
+          <span className="text-[20px] font-[600]" style={{ color: displayAc }}>{displayAp}%</span>
           <span className="text-[11px] text-[var(--tx2)]">
-            {fc >= quota ? 'on track' : `gap: ${fmt(quota - fc)}`}
+            {displayFc >= quota ? 'on track' : `gap: ${fmt(quota - displayFc)}`}
           </span>
         </div>
 
@@ -125,14 +210,14 @@ function FcCard({ meta, fc, quota, rows, detailRows, expanded, onToggle, toggleE
         <div className="h-[3px] bg-[var(--bg3)] rounded-full mb-3 overflow-hidden">
           <div
             className="h-full rounded-full transition-all duration-300"
-            style={{ width: `${cl(ap, 0, 100)}%`, background: meta.dot }}
+            style={{ width: `${cl(displayAp, 0, 100)}%`, background: meta.dot }}
           />
         </div>
 
         {/* Toggle pill (call card only) */}
         {toggleEl}
 
-        {/* Breakdown rows */}
+        {/* Breakdown rows — always model values */}
         <div className="flex flex-col gap-1 mt-2">
           {rows.map((r, i) => (
             <div
@@ -171,6 +256,12 @@ export default function ForecastCards({ override = null }) {
   const vocab = useVocabStore(s => s.vocab)
   const d = s.derived || {}
   const { quota } = s
+
+  const fcOverrides         = s.fcOverrides || {}
+  const setFcOverride       = useForecastStore(s => s.setFcOverride)
+  const clearFcOverride     = useForecastStore(s => s.clearFcOverride)
+  const clearAllFcOverrides = useForecastStore(s => s.clearAllFcOverrides)
+  const anyOverride = fcOverrides.worst_case !== null || fcOverrides.call !== null || fcOverrides.best_case !== null
 
   // When a filter override is active, use its values; otherwise fall back to derived store values
   const eff           = override ?? d
@@ -308,6 +399,9 @@ export default function ForecastCards({ override = null }) {
             expanded={!!expanded[card.meta.id]}
             onToggle={() => toggleCard(card.meta.id)}
             toggleEl={card.toggleEl}
+            overrideValue={fcOverrides[card.meta.id] ?? null}
+            onSetOverride={(val) => setFcOverride(card.meta.id, val)}
+            onClearOverride={() => clearFcOverride(card.meta.id)}
           />
         ))}
       </div>
@@ -324,6 +418,14 @@ export default function ForecastCards({ override = null }) {
         <button onClick={toggleAll} className="text-[11px] text-[var(--tx2)] hover:text-[var(--tx)] cursor-pointer border-none bg-transparent p-1">
           {allExpanded ? '▲ collapse all' : '▼ expand all'}
         </button>
+        {anyOverride && (
+          <button
+            onClick={clearAllFcOverrides}
+            className="text-[11px] text-[var(--amber)] underline cursor-pointer border-none bg-transparent p-1"
+          >
+            Clear all overrides
+          </button>
+        )}
         <span className="ml-auto text-[10px] text-[var(--tx2)] opacity-50">
           Click a card to expand · click again to collapse
         </span>

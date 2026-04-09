@@ -23,8 +23,11 @@ export default function Topbar() {
   const saveSnapshot = useSessionStore(s => s.saveSnapshot)
   const saving      = useSessionStore(s => s.saving)
 
-  const quota        = useForecastStore(s => s.quota)
-  const quarterLabel = useForecastStore(s => s.quarterLabel)
+  const quota               = useForecastStore(s => s.quota)
+  const quarterLabel        = useForecastStore(s => s.quarterLabel)
+  const fcOverrides         = useForecastStore(s => s.fcOverrides) || {}
+  const clearAllFcOverrides = useForecastStore(s => s.clearAllFcOverrides)
+  const anyFcOverride = fcOverrides.worst_case !== null || fcOverrides.call !== null || fcOverrides.best_case !== null
 
   const [promptOpen, setPromptOpen]     = useState(false)
   const [snapLabel, setSnapLabel]       = useState('')
@@ -119,6 +122,15 @@ export default function Topbar() {
             </button>
           )
         })()}
+
+        {anyFcOverride && (
+          <button
+            onClick={clearAllFcOverrides}
+            className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 text-amber-700 cursor-pointer hover:bg-amber-100 transition-colors"
+          >
+            ⚠ Submission overrides active
+          </button>
+        )}
 
         <button
           onClick={() => setDark(!dark)}

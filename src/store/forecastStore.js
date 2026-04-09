@@ -14,7 +14,7 @@ const SNAPSHOT_KEYS = [
   'r_worst_case', 'r_call', 'r_best_case', 'r_pipe', 'r_cnc',
   'pipe_worst_case', 'pipe_call', 'pipe_best_case', 'pipe_pipe',
   'cnc_opps', 'cnc_asp', 'callIncludesBestCase', 'activeView',
-  'forecastDefaults', 'fyStartMonth',
+  'forecastDefaults', 'fyStartMonth', 'fcOverrides',
   'm1_closed', 'm1_worst_case', 'm1_call', 'm1_best_case',
   'm2_closed', 'm2_worst_case', 'm2_call', 'm2_best_case',
   'm3_closed', 'm3_worst_case', 'm3_call', 'm3_best_case',
@@ -126,6 +126,7 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         activeView: 'manager',
         forecastDefaults: { r_worst_case: 80, r_call: 75, r_best_case: 50, r_pipe: 18, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
         fyStartMonth: 1,
+        fcOverrides: { worst_case: null, call: null, best_case: null },
 
         setField:  (key, value) => set(s => { s[key] = value }),
         setFields: (fields)     => set(s => { Object.assign(s, fields) }),
@@ -202,6 +203,14 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         setScopeSelected: (scope) => set(s => { s.scopeSelected = scope }),
 
         updateInput: (key, value) => set(s => { s[key] = value; s.derived = computeDerived(s) }),
+
+        setFcOverride: (tier, value) => set(s => {
+          s.fcOverrides[tier] = (value && value > 0) ? value : null
+        }),
+        clearFcOverride: (tier) => set(s => { s.fcOverrides[tier] = null }),
+        clearAllFcOverrides: () => set(s => {
+          s.fcOverrides = { worst_case: null, call: null, best_case: null }
+        }),
       })),
       {
         name: storeName,
@@ -215,6 +224,7 @@ function makeForecastStore(storeName, isNextQuarter = false) {
           cnc_opps: s.cnc_opps, cnc_asp: s.cnc_asp,
           callIncludesBestCase: s.callIncludesBestCase,
           activeView: s.activeView, forecastDefaults: s.forecastDefaults, fyStartMonth: s.fyStartMonth,
+          fcOverrides: s.fcOverrides,
           m1_closed: s.m1_closed, m1_worst_case: s.m1_worst_case, m1_call: s.m1_call, m1_best_case: s.m1_best_case,
           m2_closed: s.m2_closed, m2_worst_case: s.m2_worst_case, m2_call: s.m2_call, m2_best_case: s.m2_best_case,
           m3_closed: s.m3_closed, m3_worst_case: s.m3_worst_case, m3_call: s.m3_call, m3_best_case: s.m3_best_case,

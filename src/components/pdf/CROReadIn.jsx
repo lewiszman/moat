@@ -3,6 +3,8 @@ import { Document, Page, Text, View, StyleSheet, pdf } from '@react-pdf/renderer
 import { useForecastStore, useWowStore, useQuarterStore } from '../../store/forecastStore'
 import { useCoverageStore } from '../../store/coverageStore'
 import { calcCoverageModel } from '../../lib/coverage'
+import { getEffectiveFc } from '../../lib/forecast'
+import { getVocab } from '../../lib/vocab'
 import { fmt, attPct } from '../../lib/fmt'
 
 // ── Brand colors ───────────────────────────────────────────────
@@ -72,7 +74,7 @@ const S = StyleSheet.create({
   },
 
   // Forecast tiers
-  tiersRow:   { flexDirection: 'row', marginBottom: 6 },
+  tiersRow:   { flexDirection: 'row', marginBottom: 4 },
   tierCol:    { flex: 1, paddingRight: 8 },
   tierDvdr:   { width: 0.5, backgroundColor: C.light, marginRight: 8 },
   tierLbl:    { fontSize: 7, fontFamily: 'Helvetica-Bold', letterSpacing: 1, marginBottom: 3 },
@@ -170,12 +172,17 @@ function CROReadInDocument({ data }) {
   const {
     managerName, managerTeam, quarterLabel, quota,
     closed, fc_worst_case, fc_call, fc_best_case,
+    fc_worst_case_model, fc_call_model, fc_best_case_model,
+    overrideActive,
     bk_wc, bk_call, bk_bc, cnc_prorated,
     priorSnap, wowDelta,
     importMeta, repRows,
     channels, coverage,
     todayStr, timestamp,
+    vocab,
   } = data
+
+  const v = vocab || {}
 
   const gap     = Math.max(0, quota - fc_call)
   const onTrack = fc_call >= quota
@@ -203,6 +210,14 @@ function CROReadInDocument({ data }) {
     critical: acc.critical + r.critical,
   }), { closed: 0, wc: 0, call: 0, bc: 0, pipe: 0, critical: 0 })
 
+  // Override footnote text (appears once below tier row)
+  const overrideFootnoteLines = [
+    overrideActive?.worst_case && `${v.worst_case || 'Worst Case'}: ${fmtM(fc_worst_case_model)} model`,
+    overrideActive?.call       && `${v.call       || 'Call'}: ${fmtM(fc_call_model)} model`,
+    overrideActive?.best_case  && `${v.best_case  || 'Best Case'}: ${fmtM(fc_best_case_model)} model`,
+  ].filter(Boolean)
+  const anyOverride = overrideFootnoteLines.length > 0
+
   return (
     <Document>
       <Page size="LETTER" style={S.page}>
@@ -226,14 +241,19 @@ function CROReadInDocument({ data }) {
 
           {/* Worst Case */}
           <View style={S.tierCol}>
-            <Text style={[S.tierLbl, { color: C.blue }]}>WORST CASE</Text>
+            <Text style={[S.tierLbl, { color: C.blue }]}>
+              {(v.worst_case || 'Worst Case').toUpperCase()}{overrideActive?.worst_case ? ' †' : ''}
+            </Text>
             <Text style={[S.tierAmt, { fontSize: 18, color: C.blue }]}>{fmtM(fc_worst_case)}</Text>
             <Text style={[S.tierAtt, { color: C.blue }]}>{attPct(fc_worst_case, quota)}% of quota</Text>
             <Text style={[S.tierGap, { color: fc_worst_case >= quota ? C.green : C.coral }]}>
               {fc_worst_case >= quota ? 'On track' : `${fmtM(quota - fc_worst_case)} gap`}
             </Text>
             <Text style={S.tierChain}>
-              {'Closed ' + fmtM(closed) + ' + WC pipe ' + fmtM(bk_wc) + ' + C&C ' + fmtM(cnc_prorated)}
+              {overrideActive?.worst_case
+                ? '† Submitted forecast'
+                : 'Closed ' + fmtM(closed) + ' + WC pipe ' + fmtM(bk_wc) + ' + C&C ' + fmtM(cnc_prorated)
+              }
             </Text>
           </View>
 
@@ -241,7 +261,9 @@ function CROReadInDocument({ data }) {
 
           {/* Call FC — primary, with WoW badge */}
           <View style={S.tierCol}>
-            <Text style={[S.tierLbl, { color: C.blue }]}>CALL</Text>
+            <Text style={[S.tierLbl, { color: C.blue }]}>
+              {(v.call || 'Call').toUpperCase()}{overrideActive?.call ? ' †' : ''}
+            </Text>
             <View style={S.wowRow}>
               <Text style={[S.tierAmt, { fontSize: 22, color: C.blue }]}>{fmtM(fc_call)}</Text>
               {wowDelta !== null && (
@@ -258,7 +280,10 @@ function CROReadInDocument({ data }) {
               {onTrack ? 'On track' : `${fmtM(gap)} gap`}
             </Text>
             <Text style={S.tierChain}>
-              {'WC FC ' + fmtM(fc_worst_case) + ' + Call pipe ' + fmtM(bk_call)}
+              {overrideActive?.call
+                ? '† Submitted forecast'
+                : (v.worst_case || 'WC') + ' FC ' + fmtM(fc_worst_case) + ' + ' + (v.call || 'Call') + ' pipe ' + fmtM(bk_call)
+              }
             </Text>
           </View>
 
@@ -266,17 +291,29 @@ function CROReadInDocument({ data }) {
 
           {/* Best Case */}
           <View style={[S.tierCol, { paddingRight: 0 }]}>
-            <Text style={[S.tierLbl, { color: C.amber }]}>BEST CASE</Text>
+            <Text style={[S.tierLbl, { color: C.amber }]}>
+              {(v.best_case || 'Best Case').toUpperCase()}{overrideActive?.best_case ? ' †' : ''}
+            </Text>
             <Text style={[S.tierAmt, { fontSize: 18, color: C.amber }]}>{fmtM(fc_best_case)}</Text>
             <Text style={[S.tierAtt, { color: C.amber }]}>{attPct(fc_best_case, quota)}% of quota</Text>
             <Text style={[S.tierGap, { color: fc_best_case >= quota ? C.green : C.coral }]}>
               {fc_best_case >= quota ? 'On track' : `${fmtM(quota - fc_best_case)} gap`}
             </Text>
             <Text style={S.tierChain}>
-              {'Call FC ' + fmtM(fc_call) + ' + BC pipe ' + fmtM(bk_bc)}
+              {overrideActive?.best_case
+                ? '† Submitted forecast'
+                : (v.call || 'Call') + ' FC ' + fmtM(fc_call) + ' + BC pipe ' + fmtM(bk_bc)
+              }
             </Text>
           </View>
         </View>
+
+        {/* Override footnote */}
+        {anyOverride && (
+          <Text style={[S.footnote, { marginBottom: 3 }]}>
+            {'† Submitted forecast — adjusted from model output · ' + overrideFootnoteLines.join(' · ')}
+          </Text>
+        )}
 
         {/* Quota bar */}
         <View style={S.qbarWrap}>
@@ -288,15 +325,15 @@ function CROReadInDocument({ data }) {
             {wBC     > 0 && <View style={{ width: `${wBC}%`,     backgroundColor: '#fcd34d' }} />}
           </View>
           <View style={S.qbarPctRow}>
-            <Text style={[S.qbarPct, { color: pctColor }]}>{callPct}% attainment (Call)</Text>
+            <Text style={[S.qbarPct, { color: pctColor }]}>{callPct}% attainment ({v.call || 'Call'})</Text>
           </View>
           <View style={S.qbarLegend}>
             {[
-              ['Closed',     C.green],
-              ['WC',         '#93c5fd'],
-              ['C&C',        '#34d399'],
-              ['Call',       '#6ee7b7'],
-              ['Best Case',  '#fcd34d'],
+              ['Closed',                  C.green],
+              [v.worst_case || 'WC',      '#93c5fd'],
+              ['C&C',                     '#34d399'],
+              [v.call || 'Call',          '#6ee7b7'],
+              [v.best_case || 'Best Case','#fcd34d'],
             ].map(([lbl, clr]) => (
               <View key={lbl} style={S.qbarLegItem}>
                 <View style={[S.qbarLegDot, { backgroundColor: clr }]} />
@@ -313,7 +350,15 @@ function CROReadInDocument({ data }) {
 
         <View style={S.table}>
           <View style={S.thead}>
-            {['Rep', 'Closed', 'WC Pipeline', 'Call Pipeline', 'BC Pipeline', 'Pipeline', '⚠ Critical'].map((h, i) => (
+            {[
+              'Rep',
+              'Closed',
+              `${v.worst_case || 'WC'} Pipe`,
+              `${v.call || 'Call'} Pipe`,
+              `${v.best_case || 'BC'} Pipe`,
+              v.pipeline || 'Pipeline',
+              '\u26A0 Critical',
+            ].map((h, i) => (
               <Text key={h} style={[S.th, { flex: i === 0 ? 1.8 : 1, textAlign: i > 0 ? 'right' : 'left' }]}>{h}</Text>
             ))}
           </View>
@@ -438,7 +483,14 @@ export async function exportCROPDF() {
   const wow = useWowStore.getState()
   const cov = useCoverageStore.getState()
 
-  // WoW delta — most recent prior snapshot for active quarter
+  // Vocab — read at export time so PDF always reflects current labels
+  const vocab = getVocab()
+
+  // Effective FC — applies any active submission overrides
+  const fcOverrides = fs.fcOverrides || {}
+  const effective   = getEffectiveFc(d, fcOverrides)
+
+  // WoW delta — most recent prior snapshot for active quarter (model values)
   const qSnaps  = wow.snapshots
     .filter(s => (s.quarterKey ?? 'cq') === aq)
     .slice()
@@ -446,9 +498,9 @@ export async function exportCROPDF() {
   const priorSnap = qSnaps.length >= 2 ? qSnaps[qSnaps.length - 2] : null
   const wowDelta  = priorSnap !== null ? (d.fc_call || 0) - (priorSnap.fc_call || 0) : null
 
-  // Coverage model
+  // Coverage model — uses effective fc_call as the gap basis
   const coverage = calcCoverageModel(
-    cov.channels, fs.quota || 0, d.fc_call || 0, d.weeks_remaining ?? 0
+    cov.channels, fs.quota || 0, effective.fc_call || 0, d.weeks_remaining ?? 0
   )
 
   // Rep breakdown from importedData
@@ -487,9 +539,15 @@ export async function exportCROPDF() {
     quarterLabel:  fs.quarterLabel  || '',
     quota:         fs.quota         || 0,
     closed:        fs.closed        || 0,
-    fc_worst_case: d.fc_worst_case  || 0,
-    fc_call:       d.fc_call        || 0,
-    fc_best_case:  d.fc_best_case   || 0,
+    // Effective (override-aware) FC values
+    fc_worst_case: effective.fc_worst_case,
+    fc_call:       effective.fc_call,
+    fc_best_case:  effective.fc_best_case,
+    // Model FC values — shown in override footnote as reference
+    fc_worst_case_model: d.fc_worst_case || 0,
+    fc_call_model:       d.fc_call       || 0,
+    fc_best_case_model:  d.fc_best_case  || 0,
+    overrideActive: effective.overrideActive,
     bk_wc:         d.bk_wc         || 0,
     bk_call:       d.bk_call        || 0,
     bk_bc:         d.bk_bc          || 0,
@@ -501,6 +559,7 @@ export async function exportCROPDF() {
     repRows,
     channels:      cov.channels,
     coverage,
+    vocab,
     todayStr,
     timestamp,
   }

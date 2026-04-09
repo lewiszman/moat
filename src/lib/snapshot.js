@@ -9,7 +9,7 @@ const FORECAST_SNAP_KEYS = [
   'quota', 'closed',
   'r_worst_case', 'r_call', 'r_best_case', 'r_pipe', 'r_cnc',
   'pipe_worst_case', 'pipe_call', 'pipe_best_case', 'pipe_pipe',
-  'cnc_opps', 'cnc_asp', 'callIncludesBestCase', 'forecastDefaults', 'fyStartMonth',
+  'cnc_opps', 'cnc_asp', 'callIncludesBestCase', 'forecastDefaults', 'fyStartMonth', 'fcOverrides',
   'm1_closed', 'm1_worst_case', 'm1_call', 'm1_best_case',
   'm2_closed', 'm2_worst_case', 'm2_call', 'm2_best_case',
   'm3_closed', 'm3_worst_case', 'm3_call', 'm3_best_case',

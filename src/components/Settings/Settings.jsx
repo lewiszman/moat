@@ -488,7 +488,7 @@ function FeedbackForm() {
   const handleSend = () => {
     if (!message.trim()) return
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    const body  = `${message}\n\n---\nVersion: v3.2 | ${today}`
+    const body  = `${message}\n\n---\nVersion: v3.3 | ${today}`
     const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
     window.location.href = href
     setSent(true)
@@ -536,9 +536,21 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
-    version: 'v3.2',
+    version: 'v3.3',
     date: 'Apr 2026',
     current: true,
+    items: [
+      ['Submission overrides', 'Override any FC tier (Worst Case / Call / Best Case) for submission. Entered via pencil icon on each card. Stored in amber-bordered card with strikethrough model value. Persists in localStorage and Supabase snapshots.'],
+      ['Override indicator', 'Amber pill in topbar shows "⚠ Submission overrides active" when any override is set — click to clear all. Clear all link also appears below cards.'],
+      ['PDF vocab fix', 'CRO Read-In PDF now reads vocab labels at export time — tier labels (Worst Case / Call / Best Case) always match app terminology.'],
+      ['PDF override support', 'CRO PDF uses effective (override-aware) FC values. Override tiers show † marker and footnote with model value as reference. Coverage plan gap based on effective Call FC.'],
+      ['Activity-to-meeting ratio', 'Funnel assumption changed from % conversion rate to # of activities per meeting booked. Defaults: SDR Inbound 15, SDR Outbound 20, AE Outbound 10.'],
+    ],
+  },
+  {
+    version: 'v3.2',
+    date: 'Apr 2026',
+    current: false,
     items: [
       ['Pipeline Coverage Model', 'New tab showing gap to quota, pipeline needed per channel, and full activity funnel (activities → connects → meetings → opps → pipeline)'],
       ['Three channels', 'SDR Inbound, SDR Outbound, AE Outbound — each with independent ASP, win rate, and funnel conversion rates'],
@@ -666,7 +678,7 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v3.2'],
+            ['Version', 'v3.3'],
             ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],
