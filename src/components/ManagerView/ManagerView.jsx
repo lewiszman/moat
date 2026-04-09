@@ -55,18 +55,43 @@ export default function ManagerView() {
   }
   const scopedForecast = useMemo(() => {
     if (!scopeSelected?.size || !importedData) return null
-    const results = [...scopeSelected].map(owner => calcRepForecast(owner, importedData, storeForCalc))
+
+    // Headcount-based C&C split — equal share per AE regardless of deal count
+    const allOwners = new Set(
+      importedData
+        .filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+        .map(d => d.f_owner)
+        .filter(Boolean)
+    )
+    const totalAECount    = allOwners.size
+    const selectedAECount = [...scopeSelected].length
+    const cncShare        = totalAECount > 0 ? selectedAECount / totalAECount : 1
+    const cnc_scoped      = (s.derived?.cnc_prorated || 0) * cncShare
+
+    const results = [...scopeSelected].map(owner => calcRepForecast(owner, importedData, storeForCalc, totalAECount))
     const sum = (key) => results.reduce((acc, r) => acc + (r[key] || 0), 0)
+
+    // Build FC tiers explicitly so C&C is applied once at scope level (not summed per-AE)
+    const closedSum  = sum('closed')
+    const bkWcSum    = sum('bk_wc')
+    const bkCallSum  = sum('bk_call')
+    const bkBcSum    = sum('bk_bc')
+    const bkBcInCall = s.callIncludesBestCase ? bkBcSum * 0.5 : 0
+
+    const fc_worst_case = closedSum + bkWcSum + cnc_scoped
+    const fc_call       = fc_worst_case + bkCallSum + bkBcInCall
+    const fc_best_case  = fc_call + (bkBcSum - bkBcInCall)
+
     return {
-      fc_worst_case:   sum('fc_worst_case'),
-      fc_call:         sum('fc_call'),
-      fc_best_case:    sum('fc_best_case'),
-      closed:          sum('closed'),
-      bk_wc:           sum('bk_wc'),
-      bk_call:         sum('bk_call'),
-      bk_bc:           sum('bk_bc'),
-      cnc_prorated:    sum('cnc_rep'),
-      bk_bc_in_call:   s.callIncludesBestCase ? sum('bk_bc') * 0.5 : 0,
+      fc_worst_case,
+      fc_call,
+      fc_best_case,
+      closed:          closedSum,
+      bk_wc:           bkWcSum,
+      bk_call:         bkCallSum,
+      bk_bc:           bkBcSum,
+      cnc_prorated:    cnc_scoped,
+      bk_bc_in_call:   bkBcInCall,
       pipe_worst_case: sum('pipe_wc'),
       pipe_call:       sum('pipe_call'),
       pipe_best_case:  sum('pipe_bc'),

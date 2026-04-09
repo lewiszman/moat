@@ -183,8 +183,8 @@ export function aggregateForecast(records) {
 
 // ── Per-rep forecast calculation ──────────────────────────────
 // Uses team conversion rates applied to per-rep pipeline.
-// C&C is prorated by AE deal share (team-level input, not per-rep).
-export function calcRepForecast(ownerName, importedData, storeState) {
+// C&C is split equally by headcount (1/totalAECount per AE — team-level input, not deal-count-weighted).
+export function calcRepForecast(ownerName, importedData, storeState, totalAECount) {
   const active = importedData.filter(d =>
     d.f_owner === ownerName && !['closed', 'omitted'].includes(d.f_fc_cat_norm)
   )
@@ -207,9 +207,9 @@ export function calcRepForecast(ownerName, importedData, storeState) {
   const bk_bc   = pipe_bc   * ((r_best_case  || 0) / 100)
   const bk_pp   = pipe_pipe * ((r_pipe       || 0) / 100)
 
-  const totalActive = importedData.filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm)).length
-  const aeShare  = totalActive > 0 ? active.length / totalActive : 0
-  const cnc_rep  = (derived?.cnc_prorated || 0) * aeShare
+  // Equal headcount split — C&C is a team input, not deal-count-weighted
+  const aeShare = totalAECount > 0 ? 1 / totalAECount : 0
+  const cnc_rep = (derived?.cnc_prorated || 0) * aeShare
 
   const bk_bc_in_call = callIncludesBestCase ? bk_bc * 0.5 : 0
 

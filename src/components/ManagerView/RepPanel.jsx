@@ -10,12 +10,12 @@ const TIER_COLORS = {
   best_case:  '#b45309',
 }
 
-function RepCard({ owner, importedData, storeState, lastResult, onNavigate }) {
+function RepCard({ owner, importedData, storeState, totalAECount, lastResult, onNavigate }) {
   const v = getVocab()
 
   const repCalc = useMemo(
-    () => calcRepForecast(owner, importedData, storeState),
-    [owner, importedData, storeState]
+    () => calcRepForecast(owner, importedData, storeState, totalAECount),
+    [owner, importedData, storeState, totalAECount]
   )
 
   // Derive flag counts from inspector lastResult.active
@@ -78,10 +78,10 @@ function RepCard({ owner, importedData, storeState, lastResult, onNavigate }) {
           <span className="text-[11px] font-[600] text-[var(--tx)]">{fmt(repCalc.closed)}</span>
         </div>
 
-        {/* C&C share — informational, not included in FC arithmetic */}
+        {/* C&C share — informational, equal headcount split */}
         {repCalc.cnc_rep > 0 && (
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-[var(--tx2)]">C&amp;C (est.)</span>
+            <span className="text-[11px] text-[var(--tx2)]">C&amp;C (1 of {totalAECount} AEs)</span>
             <span className="text-[11px] font-[600] text-purple-600">{fmt(repCalc.cnc_rep)}</span>
           </div>
         )}
@@ -122,6 +122,18 @@ export default function RepPanel({ selectedAEs, importedData }) {
     setActiveView('inspector')
   }
 
+  // Equal headcount split for C&C — count AEs with active (non-closed, non-omitted) deals
+  const totalAECount = useMemo(() => {
+    if (!importedData) return 0
+    const allOwners = new Set(
+      importedData
+        .filter(d => !['closed', 'omitted'].includes(d.f_fc_cat_norm))
+        .map(d => d.f_owner)
+        .filter(Boolean)
+    )
+    return allOwners.size
+  }, [importedData])
+
   const gridClass = selectedAEs.length === 1 ? 'grid-cols-1' : 'grid-cols-2'
 
   return (
@@ -134,6 +146,7 @@ export default function RepPanel({ selectedAEs, importedData }) {
             owner={owner}
             importedData={importedData}
             storeState={storeState}
+            totalAECount={totalAECount}
             lastResult={lastResult}
             onNavigate={handleNavigate}
           />
