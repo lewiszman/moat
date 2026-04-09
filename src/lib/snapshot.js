@@ -99,10 +99,18 @@ export function applySnapshot(snap) {
   }
 
   if (snap.coverage?.channels) {
-    useCoverageStore.setState({
-      channels:    snap.coverage.channels,
-      gapOverride: snap.coverage.gapOverride ?? null,
+    const VALID_CHANNEL_KEYS = ['ae', 'sdr']
+    const restoredChannels = {}
+    VALID_CHANNEL_KEYS.forEach(k => {
+      if (snap.coverage.channels[k]) restoredChannels[k] = snap.coverage.channels[k]
     })
+    if (Object.keys(restoredChannels).length > 0) {
+      useCoverageStore.setState({
+        channels:    restoredChannels,
+        gapOverride: snap.coverage.gapOverride ?? null,
+      })
+    }
+    // If snapshot only had old channel keys (sdr_inbound etc.), skip restore — use fresh defaults
   }
 
   if (snap.importMeta) {
