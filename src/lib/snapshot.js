@@ -39,6 +39,7 @@ export function buildSnapshot() {
   } catch {}
 
   const coverage = useCoverageStore.getState()
+  const coverageSnap = { channels: coverage.channels, gapOverride: coverage.gapOverride ?? null }
 
   return sanitizeSnapshot({
     cq:       pickForecast(cq),
@@ -56,7 +57,7 @@ export function buildSnapshot() {
     sectionComments: sc.comments,
     vocab:    vocab.vocab,
     catMap:   catMapS.catMap,
-    coverage: { channels: coverage.channels },
+    coverage: coverageSnap,
     importMeta,
   })
 }
@@ -98,7 +99,10 @@ export function applySnapshot(snap) {
   }
 
   if (snap.coverage?.channels) {
-    useCoverageStore.setState({ channels: snap.coverage.channels })
+    useCoverageStore.setState({
+      channels:    snap.coverage.channels,
+      gapOverride: snap.coverage.gapOverride ?? null,
+    })
   }
 
   if (snap.importMeta) {

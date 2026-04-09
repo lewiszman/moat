@@ -247,11 +247,10 @@ export default function CoverageView() {
   const weeks_total    = derived.weeks_total    || 0
 
   const channels        = useCoverageStore(s => s.channels)
+  const gapOverride     = useCoverageStore(s => s.gapOverride)
+  const setGapOverride  = useCoverageStore(s => s.setGapOverride)
 
   const channelKeys = Object.keys(channels)
-
-  // Gap override — null means use auto (quota - fc_call)
-  const [gapOverride, setGapOverride] = useState(null)
 
   // Compute model — pass override when set
   const model = calcCoverageModel(channels, quota, fc_call, weeksRemaining, gapOverride)

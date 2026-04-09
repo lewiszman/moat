@@ -41,7 +41,8 @@ const DEFAULT_CHANNELS = {
 export const useCoverageStore = create(
   persist(
     immer((set) => ({
-      channels: structuredClone(DEFAULT_CHANNELS),
+      channels:    structuredClone(DEFAULT_CHANNELS),
+      gapOverride: null,   // number | null — null means use auto (quota - fc_call)
 
       setChannelField: (channelKey, field, value) =>
         set(s => { s.channels[channelKey][field] = value }),
@@ -54,10 +55,20 @@ export const useCoverageStore = create(
 
       resetAllChannels: () =>
         set(s => { s.channels = structuredClone(DEFAULT_CHANNELS) }),
+
+      setGapOverride: (value) =>
+        set(s => { s.gapOverride = (value !== null && value > 0) ? value : null }),
+
+      clearGapOverride: () =>
+        set(s => { s.gapOverride = null }),
     })),
     {
       name:    'moat-coverage-v3',
       storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        channels:    s.channels,
+        gapOverride: s.gapOverride,
+      }),
     }
   )
 )
