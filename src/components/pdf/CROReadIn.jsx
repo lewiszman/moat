@@ -276,7 +276,7 @@ function CROReadInDocument({ data }) {
   const noWeeks     = weeks_remaining === 0
   const fullQuarter = prorationFactor >= 1
   const prorPct     = Math.round((prorationFactor || 0) * 100)
-  const iqpPctOfGap = gap > 0 ? Math.round((cnc_prorated / gap) * 100) : null
+  const iqpPctOfWc  = fc_worst_case > 0 ? Math.round((cnc_prorated / fc_worst_case) * 100) : null
 
   return (
     <Document>
@@ -461,7 +461,7 @@ function CROReadInDocument({ data }) {
         {/* ── BAND 3: EXPECTED IQP ─────────────────────── */}
         <Text style={S.bandLbl}>EXPECTED IQP  {'\u00B7'}  IN-QUARTER PIPELINE</Text>
         <Text style={S.iqpSubLbl}>
-          {'Create & close opportunities expected to be sourced and closed within ' + (quarterLabel || 'this quarter') + '.  Prorated for ' + weeks_remaining + ' of ' + weeks_total + ' selling weeks.'}
+          {'Create & close opportunities expected to be sourced and closed within ' + (quarterLabel || 'this quarter') + '.  Prorated for ' + weeks_remaining + ' of ' + weeks_total + ' selling weeks. IQP bookings are embedded in the ' + (v.worst_case || 'Worst Case') + ' forecast above — the Coverage Plan below closes any remaining gap independently.'}
         </Text>
 
         {noInputs ? (
@@ -519,9 +519,9 @@ function CROReadInDocument({ data }) {
             {/* RIGHT — stat cards */}
             <View style={S.iqpRight}>
               <StatCard
-                label="IQP as % of gap"
-                value={iqpPctOfGap !== null ? String(iqpPctOfGap) + '%' : '\u2014'}
-                sub={gap > 0 ? fmtM(cnc_prorated) + ' of ' + fmtM(gap) + ' gap' : 'No gap to cover'}
+                label={'Embedded in ' + (v.worst_case || 'Worst Case') + ' FC'}
+                value={fmtM(cnc_prorated)}
+                sub={iqpPctOfWc !== null ? String(iqpPctOfWc) + '% of ' + (v.worst_case || 'Worst Case') + ' forecast' : '\u2014'}
                 borderColor={C.blue}
               />
               <StatCard
@@ -533,7 +533,7 @@ function CROReadInDocument({ data }) {
               <StatCard
                 label={'In ' + (v.worst_case || 'Worst Case') + ' FC'}
                 value={fmtM(cnc_prorated)}
-                sub={'of ' + fmtM(fc_worst_case) + ' total'}
+                sub={'of ' + fmtM(fc_worst_case) + ' ' + (v.worst_case || 'Worst Case') + ' FC \u00B7 flows into ' + (v.call || 'Call') + ' submission'}
                 borderColor={C.green}
               />
             </View>
@@ -542,10 +542,13 @@ function CROReadInDocument({ data }) {
 
         {/* ── BAND 4: COVERAGE PLAN ─────────────────────── */}
         <Text style={S.bandLbl}>
-          <Text>{'COVERAGE PLAN  \u00B7  GAP TO QUOTA: '}</Text>
+          <Text>{'COVERAGE PLAN  \u00B7  INCREMENTAL GAP: '}</Text>
           <Text style={{ color: gap > 0 ? C.coral : C.green }}>
             {gap > 0 ? fmtM(gap) : 'On track'}
           </Text>
+        </Text>
+        <Text style={[S.iqpSubLbl, { marginTop: -2 }]}>
+          {'Pipeline and activities needed in addition to IQP to close ' + fmtM(gap) + ' gap between ' + (v.call || 'Call') + ' FC and quota. IQP already reflected in forecast.'}
         </Text>
 
         {/* Gap allocation row */}
