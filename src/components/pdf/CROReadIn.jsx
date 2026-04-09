@@ -252,7 +252,8 @@ function CROReadInDocument({ data }) {
   const callPct  = attPct(fc_call, quota)
   const pctColor = attColor(fc_call, quota)
 
-  const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
+  // Both channels (ae, sdr) are always active
+  const enabledKeys = Object.keys(channels)
 
   // Pipeline rep totals
   const repTotals = repRows.reduce((acc, r) => ({

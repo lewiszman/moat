@@ -60,7 +60,8 @@ export function calcCoverageModel(channels, quota, fc_call, weeksRemaining, gapO
   const rawGap = Math.max(0, quota - fc_call)
   const gap = gapOverride !== null ? Math.max(0, gapOverride) : rawGap
 
-  const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
+  // Both channels (ae, sdr) are always active — no enabled filter needed
+  const enabledKeys = Object.keys(channels)
   const totalAllocation = enabledKeys.reduce((s, k) => s + channels[k].allocation, 0)
   const allocationValid = totalAllocation === 100
 

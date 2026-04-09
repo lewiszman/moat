@@ -7,32 +7,13 @@ import ChannelCard from './ChannelCard'
 import FunnelRates from './FunnelRates'
 
 // ── Allocation row ─────────────────────────────────────────────
-function AllocationRow({ channelKey, channel, disabled }) {
+function AllocationRow({ channelKey, channel }) {
   const setChannelField = useCoverageStore(s => s.setChannelField)
-  const toggleChannel   = useCoverageStore(s => s.toggleChannel)
 
   return (
-    <div className={`flex items-center gap-3 py-2 ${disabled ? 'opacity-40' : ''}`}>
-      {/* Toggle */}
-      <button
-        onClick={() => toggleChannel(channelKey)}
-        className={`
-          w-8 h-4 rounded-full relative transition-colors duration-150 flex-shrink-0
-          cursor-pointer border-none
-          ${channel.enabled ? 'bg-[var(--blue)]' : 'bg-[var(--bdr2)]'}
-        `}
-        title={channel.enabled ? 'Disable channel' : 'Enable channel'}
-      >
-        <span
-          className={`
-            absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-all duration-150
-            ${channel.enabled ? 'left-4' : 'left-0.5'}
-          `}
-        />
-      </button>
-
+    <div className="flex items-center gap-3 py-2">
       {/* Label */}
-      <span className="text-[12px] font-[500] text-[var(--tx)] w-28 flex-shrink-0">
+      <span className="text-[12px] font-[500] text-[var(--tx)] w-16 flex-shrink-0">
         {channel.label}
       </span>
 
@@ -42,9 +23,8 @@ function AllocationRow({ channelKey, channel, disabled }) {
         min={0}
         max={100}
         value={channel.allocation}
-        disabled={!channel.enabled}
         onChange={e => setChannelField(channelKey, 'allocation', Number(e.target.value))}
-        className="flex-1 accent-[var(--blue)] cursor-pointer disabled:cursor-not-allowed"
+        className="flex-1 accent-[var(--blue)] cursor-pointer"
       />
 
       {/* Number input */}
@@ -52,9 +32,8 @@ function AllocationRow({ channelKey, channel, disabled }) {
         <input
           type="text"
           value={channel.allocation}
-          disabled={!channel.enabled}
           onChange={e => setChannelField(channelKey, 'allocation', Math.min(100, Math.max(0, parseMoney(e.target.value))))}
-          className="w-10 text-[12px] font-[700] text-right bg-transparent border-b border-[var(--bdr2)] focus:border-[var(--blue)] outline-none disabled:opacity-50"
+          className="w-10 text-[12px] font-[700] text-right bg-transparent border-b border-[var(--bdr2)] focus:border-[var(--blue)] outline-none"
         />
         <span className="text-[12px] text-[var(--tx2)]">%</span>
       </div>
@@ -203,8 +182,6 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total, gapOverrid
 function TotalSummary({ model, channels }) {
   if (!model) return null
   const { totalPipelineNeeded, totalActivitiesNeeded, totalPipelinePerWeek, totalActivitiesPerWeek } = model
-  const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
-
   return (
     <div className="card overflow-hidden mt-4">
       <div className="px-4 py-2.5 text-[11px] font-[700] uppercase tracking-wider bg-[var(--bg2)] text-[var(--tx2)] border-b border-[var(--bdr2)]">
@@ -235,15 +212,16 @@ function TotalSummary({ model, channels }) {
         <strong className="text-[var(--tx)]">Pipeline: {fmt(Math.round(totalPipelinePerWeek / 1000) * 1000)}/wk</strong>
         {' · '}
         <strong className="text-[var(--tx)]">Activities: {totalActivitiesPerWeek.toLocaleString()}/wk</strong>
-        {enabledKeys.map(k => {
+        {Object.keys(channels).map(k => {
           const ch = channels[k]
           const chModel = model.channels[k] || {}
           const perAeWk = Math.ceil(chModel.activities_per_ae_per_week || 0)
           if (!perAeWk) return null
+          const role = k === 'sdr' ? 'SDR' : 'AE'
           return (
             <span key={k}>
               {' · '}
-              <strong className="text-[var(--tx)]">Acts/AE ({ch.label}): {perAeWk}/wk</strong>
+              <strong className="text-[var(--tx)]">Activities per {role}: {perAeWk}/wk</strong>
             </span>
           )
         })}
@@ -269,10 +247,9 @@ export default function CoverageView() {
   // Compute model — pass override when set
   const model = calcCoverageModel(channels, quota, fc_call, weeksRemaining, gapOverride)
 
-  // Allocation validation
-  const enabledKeys = channelKeys.filter(k => channels[k].enabled)
-  const totalAlloc  = enabledKeys.reduce((s, k) => s + channels[k].allocation, 0)
-  const allocValid  = totalAlloc === 100
+  // Allocation validation — both channels are always active
+  const totalAlloc = channelKeys.reduce((s, k) => s + channels[k].allocation, 0)
+  const allocValid = totalAlloc === 100
 
   return (
     <div className="p-4 max-w-5xl mx-auto">
@@ -305,7 +282,6 @@ export default function CoverageView() {
               key={k}
               channelKey={k}
               channel={channels[k]}
-              disabled={!channels[k].enabled}
             />
           ))}
 
@@ -332,7 +308,7 @@ export default function CoverageView() {
       {allocValid ? (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-            {enabledKeys.map(k => (
+            {channelKeys.map(k => (
               <ChannelCard
                 key={k}
                 channelKey={k}

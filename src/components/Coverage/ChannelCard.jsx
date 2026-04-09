@@ -94,13 +94,13 @@ export default function ChannelCard({ channelKey, channel, model, weeksRemaining
                   </div>
                   <div className="flex items-start justify-between flex-1 py-1.5 pl-1 min-h-[32px]">
                     <span className="text-[11px] text-[var(--tx2)] italic pt-0.5">
-                      ↳ per AE ({channel.headcount} AEs)
+                      ↳ per {channelKey === 'sdr' ? 'SDR' : 'AE'} ({channel.headcount} {channelKey === 'sdr' ? 'SDRs' : 'AEs'})
                     </span>
                     <div className="text-right">
                       <div className="text-[13px] font-[600]" style={{ color: '#f05252' }}>
                         {actsPerAe}
                       </div>
-                      <div className="text-[10px] text-[var(--tx2)]">{actsPerAeWk} per AE</div>
+                      <div className="text-[10px] text-[var(--tx2)]">{actsPerAeWk} per {channelKey === 'sdr' ? 'SDR' : 'AE'}</div>
                     </div>
                   </div>
                 </div>

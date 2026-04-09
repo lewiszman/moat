@@ -14,7 +14,7 @@ const RATE_ROWS = [
   { label: 'Opp → SAA %',            field: 'opp_to_saa',          type: 'pct',          min: 0,    max: 100   },
   { label: 'Win rate %',             field: 'win_rate',             type: 'pct',          min: 0,    max: 100   },
   { label: 'ASP',                    field: 'asp',                  type: 'money',        min: 0             },
-  { label: 'Headcount',              field: 'headcount',            type: 'int',          min: 1,    max: 999   },
+  { label: 'Headcount (AEs/SDRs)',   field: 'headcount',            type: 'int',          min: 1,    max: 999   },
 ]
 
 // Convert stored ratio → display integer (e.g. 0.002 → 500)

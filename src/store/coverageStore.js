@@ -6,22 +6,12 @@ import { immer } from 'zustand/middleware/immer'
 // e.g. 500 activities per meeting → stored as 0.002 = 1/500.
 // Display in UI: Math.round(1 / activity_to_meeting) → 500.
 // Convert on write: 1 / displayValue → 0.002.
+//
+// Both channels (ae, sdr) are always active — no enable/disable toggle.
 
 const DEFAULT_CHANNELS = {
-  sdr: {
-    label:               'SDR',
-    enabled:             true,
-    allocation:          50,
-    asp:                 20000,
-    win_rate:            18,
-    activity_to_meeting: 0.002,   // ratio: 1/500 (500 activities per meeting)
-    meeting_to_opp:      100,
-    opp_to_saa:          50,
-    headcount:           2,
-  },
   ae: {
     label:               'AE',
-    enabled:             true,
     allocation:          50,
     asp:                 28000,
     win_rate:            25,
@@ -29,6 +19,16 @@ const DEFAULT_CHANNELS = {
     meeting_to_opp:      100,
     opp_to_saa:          50,
     headcount:           4,
+  },
+  sdr: {
+    label:               'SDR',
+    allocation:          50,
+    asp:                 20000,
+    win_rate:            18,
+    activity_to_meeting: 0.002,   // ratio: 1/500 (500 activities per meeting)
+    meeting_to_opp:      100,
+    opp_to_saa:          50,
+    headcount:           2,
   },
 }
 
@@ -40,9 +40,6 @@ export const useCoverageStore = create(
 
       setChannelField: (channelKey, field, value) =>
         set(s => { s.channels[channelKey][field] = value }),
-
-      toggleChannel: (channelKey) =>
-        set(s => { s.channels[channelKey].enabled = !s.channels[channelKey].enabled }),
 
       resetChannel: (channelKey) =>
         set(s => { s.channels[channelKey] = structuredClone(DEFAULT_CHANNELS[channelKey]) }),
@@ -57,7 +54,7 @@ export const useCoverageStore = create(
         set(s => { s.gapOverride = null }),
     })),
     {
-      name:    'moat-coverage-v4',   // bumped to force fresh two-channel defaults
+      name:    'moat-coverage-v5',   // bumped — two fixed channels (ae/sdr), no enable toggle
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         channels:    s.channels,
