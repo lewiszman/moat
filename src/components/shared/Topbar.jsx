@@ -1,11 +1,16 @@
-import React, { useState, useEffect } from 'react'
-import { useForecastStore } from '../../store/forecastStore'
+import React, { useState } from 'react'
+import { useForecastStore, useWowStore, useQuarterStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
+import { useCoverageStore } from '../../store/coverageStore'
 import { useDarkMode } from '../../hooks/useDarkMode'
 import AuthButton from './AuthButton'
 import SessionHistory from './SessionHistory'
 import { exportForecastPDF, exportInspectionPDF } from '../../lib/exportPdf.jsx'
-import { exportCROPDF } from '../pdf/CROReadIn.jsx'
+import { exportCROPDFWithSummary } from '../pdf/CROReadIn.jsx'
+import { calcCoverageModel } from '../../lib/coverage'
+import { getEffectiveFc } from '../../lib/forecast'
+import { getVocab } from '../../lib/vocab'
+import ExecSummaryPanel from '../pdf/ExecSummaryPanel.jsx'
 
 const VIEW_LABELS = {
   manager: 'Manager Walk-Up',
@@ -36,6 +41,8 @@ export default function Topbar() {
   const [nudgeDismissed, setNudgeDismissed] = useState(
     () => !!sessionStorage.getItem('moat-nudge-dismissed')
   )
+  const [execPanelOpen, setExecPanelOpen] = useState(false)
+  const [panelData, setPanelData]         = useState(null)
 
   const handleDownloadPdf = async () => {
     setPdfLoading(true)
@@ -61,7 +68,113 @@ export default function Topbar() {
     setNudgeDismissed(true)
   }
 
+  const openExecPanel = () => {
+    const fs  = useForecastStore.getState()
+    const d   = fs.derived || {}
+    const aq  = useQuarterStore.getState().activeQuarter
+    const wow = useWowStore.getState()
+    const cov = useCoverageStore.getState()
+    const vocab      = getVocab()
+    const fcOverrides = fs.fcOverrides || {}
+    const effective   = getEffectiveFc(d, fcOverrides)
+
+    const coverage = calcCoverageModel(
+      cov.channels, fs.quota || 0, effective.fc_call || 0, d.weeks_remaining ?? 0
+    )
+    const ae  = coverage.channels['ae']  || null
+    const sdr = coverage.channels['sdr'] || null
+
+    const gap              = Math.max(0, (fs.quota || 0) - (effective.fc_call || 0))
+    const total_saa_needed = (ae?.saas_needed || 0) + (sdr?.saas_needed || 0)
+
+    const qSnaps = wow.snapshots
+      .filter(s => (s.quarterKey ?? 'cq') === aq)
+      .slice().sort((a, b) => new Date(a.date) - new Date(b.date))
+    const priorSnap = qSnaps.length >= 2 ? qSnaps[qSnaps.length - 2] : null
+    const wowDelta  = priorSnap !== null ? (d.fc_call || 0) - (priorSnap.fc_call || 0) : null
+
+    const repRows = []
+    if (fs.importedData?.length) {
+      const grouped = {}
+      fs.importedData.forEach(deal => {
+        const owner = deal.f_owner || 'Unknown'
+        if (!grouped[owner]) {
+          grouped[owner] = { owner, closed: 0, wc: 0, call: 0, bc: 0, pipe: 0, critical: 0 }
+        }
+        const amt = deal.f_amount_num || 0
+        const cat = deal.f_fc_cat_norm
+        if      (cat === 'closed')     grouped[owner].closed += amt
+        else if (cat === 'worst_case') grouped[owner].wc     += amt
+        else if (cat === 'call')       grouped[owner].call   += amt
+        else if (cat === 'best_case')  grouped[owner].bc     += amt
+        else if (cat === 'pipeline')   grouped[owner].pipe   += amt
+        grouped[owner].critical += (deal._flags || []).filter(f => f.sev === 'critical').length
+      })
+      Object.values(grouped)
+        .sort((a, b) => (b.closed + b.wc + b.call) - (a.closed + a.wc + a.call))
+        .forEach(r => repRows.push(r))
+    }
+
+    setPanelData({
+      managerName:   fs.managerName   || '',
+      managerTeam:   fs.managerTeam   || '',
+      quarterLabel:  fs.quarterLabel  || '',
+      quota:         fs.quota         || 0,
+      closed:        fs.closed        || 0,
+      fc_worst_case: effective.fc_worst_case,
+      fc_call:       effective.fc_call,
+      fc_best_case:  effective.fc_best_case,
+      fc_worst_case_model: d.fc_worst_case || 0,
+      fc_call_model:       d.fc_call       || 0,
+      fc_best_case_model:  d.fc_best_case  || 0,
+      overrideActive: effective.overrideActive,
+      bk_wc:  d.bk_wc  || 0,
+      bk_call: d.bk_call || 0,
+      bk_bc:  d.bk_bc   || 0,
+      cnc_prorated:    d.cnc_prorated   || 0,
+      cnc_opps:        fs.cnc_opps      || 0,
+      cnc_asp:         fs.cnc_asp       || 0,
+      r_cnc:           fs.r_cnc         || 0,
+      cnc_pipe:        d.cnc_pipe       || 0,
+      prorationFactor: d.prorationFactor ?? 1,
+      weeks_remaining: d.weeks_remaining ?? 0,
+      weeks_total:     d.weeks_total     || 0,
+      weeksRemaining:  d.weeks_remaining ?? 0,
+      gap,
+      total_saa_needed,
+      ae_allocation:  cov.channels['ae']  ? cov.channels['ae'].allocation  : 50,
+      ae_saa_needed:  ae  ? ae.saas_needed  : 0,
+      sdr_allocation: cov.channels['sdr'] ? cov.channels['sdr'].allocation : 50,
+      sdr_saa_needed: sdr ? sdr.saas_needed : 0,
+      vocabWorstCase: vocab.worst_case,
+      vocabCall:      vocab.call,
+      vocabBestCase:  vocab.best_case,
+      overridesActive: Object.values(fcOverrides).some(v => v !== null),
+      priorSnap,
+      wowDelta,
+      importMeta: fs.importMeta,
+      repRows,
+      channels:  cov.channels,
+      coverage,
+      ae,
+      sdr,
+      vocab,
+    })
+    setExecPanelOpen(true)
+  }
+
+  const handleCroExport = async (summaryText) => {
+    setExecPanelOpen(false)
+    setCroPdfLoading(true)
+    try {
+      await exportCROPDFWithSummary(panelData, summaryText)
+    } finally {
+      setCroPdfLoading(false)
+    }
+  }
+
   return (
+    <>
     <header className="flex items-center h-11 px-4 border-b border-[var(--bdr2)] bg-[var(--bg)] flex-shrink-0 gap-3">
       <span className="text-[12px] font-[700] tracking-widest text-[var(--coral)] uppercase">
         MOAT
@@ -107,10 +220,7 @@ export default function Topbar() {
             : undefined
           return (
             <button
-              onClick={async () => {
-                setCroPdfLoading(true)
-                try { await exportCROPDF() } finally { setCroPdfLoading(false) }
-              }}
+              onClick={openExecPanel}
               disabled={disabled}
               title={tooltip}
               className="btn text-[11px] flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -198,5 +308,14 @@ export default function Topbar() {
         )}
       </div>
     </header>
+
+    {execPanelOpen && panelData && (
+      <ExecSummaryPanel
+        data={panelData}
+        onExport={handleCroExport}
+        onClose={() => setExecPanelOpen(false)}
+      />
+    )}
+  </>
   )
 }

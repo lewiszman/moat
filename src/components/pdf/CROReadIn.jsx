@@ -42,7 +42,7 @@ const S = StyleSheet.create({
     backgroundColor: C.white,
     paddingLeft: 28,
     paddingRight: 28,
-    paddingBottom: 34,
+    paddingBottom: 20,
   },
 
   // Header
@@ -83,7 +83,7 @@ const S = StyleSheet.create({
   tierAmt:    { fontFamily: 'Helvetica-Bold', marginBottom: 1 },
   tierAtt:    { fontSize: 8 },
   tierGap:    { fontSize: 7, marginTop: 1 },
-  tierChain:  { fontSize: 6, color: C.gray, marginTop: 2, lineHeight: 1.4 },
+  tierChain:  { fontSize: 5.5, color: C.gray, marginTop: 2, lineHeight: 1.4 },
 
   // WoW badge
   wowRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 1 },
@@ -115,14 +115,15 @@ const S = StyleSheet.create({
   // Tables
   table:   { width: '100%', marginBottom: 2 },
   thead:   { flexDirection: 'row', backgroundColor: C.light, paddingVertical: 2, paddingHorizontal: 4 },
-  th:      { fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray, letterSpacing: 0.5 },
+  th:      { fontSize: 6.5, fontFamily: 'Helvetica-Bold', color: C.gray, letterSpacing: 0.5 },
+  // Overflow fallback: if repRows.length > 6, consider reducing trow height to 12pt and td fontSize to 7pt
   trow:    { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6' },
   trowAlt: { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6', backgroundColor: C.light },
   trowTot: { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, backgroundColor: C.lBlue, borderTop: '1 solid #1a56db' },
-  td:      { fontSize: 8, color: '#374151' },
-  tdBold:  { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink },
-  tdR:     { fontSize: 8, color: '#374151', textAlign: 'right' },
-  tdRB:    { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink, textAlign: 'right' },
+  td:      { fontSize: 7.5, color: '#374151' },
+  tdBold:  { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.ink },
+  tdR:     { fontSize: 7.5, color: '#374151', textAlign: 'right' },
+  tdRB:    { fontSize: 7.5, fontFamily: 'Helvetica-Bold', color: C.ink, textAlign: 'right' },
 
   // Coverage allocation cells
   allocRow:  { flexDirection: 'row', marginBottom: 3 },
@@ -170,6 +171,86 @@ const S = StyleSheet.create({
     justifyContent: 'space-between',
   },
   footerTxt: { fontSize: 6, color: '#9ca3af' },
+
+  // ── Exec Summary Band ─────────────────────────────────────────
+  execBand: {
+    backgroundColor: '#f8faff',
+    borderRadius: 2,
+    borderWidth: 0.5,
+    borderColor: '#dbeafe',
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 38,
+    paddingRight: 38,
+    marginLeft: -28,
+    marginRight: -28,
+    marginBottom: 0,
+  },
+  execAccent: {
+    position: 'absolute',
+    left: 28,
+    top: 0,
+    bottom: 0,
+    width: 3,
+    backgroundColor: '#1a56db',
+  },
+  execLabel: {
+    fontSize: 6,
+    fontFamily: 'Helvetica-Bold',
+    color: '#6b7280',
+    letterSpacing: 1,
+    marginBottom: 3,
+  },
+  execBody: {
+    fontSize: 8.5,
+    color: '#0f2d6b',
+    lineHeight: 1.5,
+  },
+  execEmpty: {
+    fontSize: 8,
+    color: '#6b7280',
+    fontFamily: 'Helvetica-Oblique',
+  },
+
+  // ── Section separator ─────────────────────────────────────────
+  sep: {
+    height: 0.5,
+    backgroundColor: '#dbeafe',
+    marginTop: 8,
+    marginBottom: 8,
+    marginLeft: -28,
+    marginRight: -28,
+  },
+
+  // ── Band backgrounds ──────────────────────────────────────────
+  bandWalkUp: {
+    backgroundColor: '#ffffff',
+    marginLeft: -28,
+    marginRight: -28,
+    paddingLeft: 28,
+    paddingRight: 28,
+  },
+  bandPipeline: {
+    backgroundColor: '#fafafa',
+    marginLeft: -28,
+    marginRight: -28,
+    paddingLeft: 28,
+    paddingRight: 28,
+  },
+  bandIqp: {
+    backgroundColor: '#ffffff',
+    marginLeft: -28,
+    marginRight: -28,
+    paddingLeft: 28,
+    paddingRight: 28,
+  },
+  bandCoverage: {
+    backgroundColor: '#fafafa',
+    marginLeft: -28,
+    marginRight: -28,
+    paddingLeft: 28,
+    paddingRight: 28,
+  },
 })
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -235,6 +316,7 @@ function CROReadInDocument({ data }) {
     ae, sdr,
     todayStr, timestamp,
     vocab,
+    execSummary,
   } = data
 
   const v = vocab || {}
@@ -296,7 +378,19 @@ function CROReadInDocument({ data }) {
           </View>
         </View>
 
+        {/* ── EXEC SUMMARY BAND ────────────────────────── */}
+        <View style={S.execBand}>
+          <View style={S.execAccent} />
+          <Text style={S.execLabel}>EXECUTIVE SUMMARY</Text>
+          {execSummary
+            ? <Text style={S.execBody}>{execSummary}</Text>
+            : <Text style={S.execEmpty}>No summary provided.</Text>
+          }
+        </View>
+        <View style={S.sep} />
+
         {/* ── BAND 1: FORECAST WALK-UP ──────────────────── */}
+        <View style={S.bandWalkUp}>
         <View style={S.tiersRow}>
 
           {/* Worst Case */}
@@ -402,8 +496,11 @@ function CROReadInDocument({ data }) {
             ))}
           </View>
         </View>
+        </View>{/* end bandWalkUp */}
+        <View style={S.sep} />
 
         {/* ── BAND 2: PIPELINE HEALTH ───────────────────── */}
+        <View style={S.bandPipeline}>
         <Text style={S.bandLbl}>
           {'PIPELINE' + (importMeta ? `  \u00B7  ${importMeta.count} DEALS  \u00B7  ${importMeta.filename}` : '')}
         </Text>
@@ -457,8 +554,11 @@ function CROReadInDocument({ data }) {
             </View>
           )}
         </View>
+        </View>{/* end bandPipeline */}
+        <View style={S.sep} />
 
         {/* ── BAND 3: EXPECTED IQP ─────────────────────── */}
+        <View style={S.bandIqp}>
         <Text style={S.bandLbl}>EXPECTED IQP  {'\u00B7'}  IN-QUARTER PIPELINE</Text>
         <Text style={S.iqpSubLbl}>
           {'Create & close opportunities expected to be sourced and closed within ' + (quarterLabel || 'this quarter') + '.  Prorated for ' + weeks_remaining + ' of ' + weeks_total + ' selling weeks. IQP bookings are embedded in the ' + (v.worst_case || 'Worst Case') + ' forecast above — the Coverage Plan below closes any remaining gap independently.'}
@@ -539,8 +639,11 @@ function CROReadInDocument({ data }) {
             </View>
           </View>
         )}
+        </View>{/* end bandIqp */}
+        <View style={S.sep} />
 
         {/* ── BAND 4: COVERAGE PLAN ─────────────────────── */}
+        <View style={S.bandCoverage}>
         <Text style={S.bandLbl}>
           <Text>{'COVERAGE PLAN  \u00B7  INCREMENTAL GAP: '}</Text>
           <Text style={{ color: gap > 0 ? C.coral : C.green }}>
@@ -628,6 +731,7 @@ function CROReadInDocument({ data }) {
           const sdrStr = `SDR: ${fmtM(sdrConf.asp)} ASP \u00B7 ${sdrConf.win_rate}% win \u00B7 ${actsSdr} acts/mtg \u00B7 ${sdrConf.meeting_to_opp}% mtg\u2192opp \u00B7 ${sdrConf.opp_to_saa}% opp\u2192SAA \u00B7 ${sdrConf.headcount || 1} SDRs`
           return <Text style={S.footnote}>{aeStr + '   |   ' + sdrStr}</Text>
         })()}
+        </View>{/* end bandCoverage */}
 
         {/* ── FOOTER ────────────────────────────────────── */}
         <View style={S.footer}>
@@ -640,22 +744,18 @@ function CROReadInDocument({ data }) {
   )
 }
 
-// ── Export function ────────────────────────────────────────────
-export async function exportCROPDF() {
+// ── Collect PDF data from stores ──────────────────────────────
+function collectPDFData() {
   const fs  = useForecastStore.getState()
   const d   = fs.derived || {}
   const aq  = useQuarterStore.getState().activeQuarter
   const wow = useWowStore.getState()
   const cov = useCoverageStore.getState()
 
-  // Vocab — read at export time
-  const vocab = getVocab()
-
-  // Effective FC — applies any active submission overrides
+  const vocab      = getVocab()
   const fcOverrides = fs.fcOverrides || {}
   const effective   = getEffectiveFc(d, fcOverrides)
 
-  // WoW delta — most recent prior snapshot for active quarter (model values)
   const qSnaps  = wow.snapshots
     .filter(s => (s.quarterKey ?? 'cq') === aq)
     .slice()
@@ -663,12 +763,10 @@ export async function exportCROPDF() {
   const priorSnap = qSnaps.length >= 2 ? qSnaps[qSnaps.length - 2] : null
   const wowDelta  = priorSnap !== null ? (d.fc_call || 0) - (priorSnap.fc_call || 0) : null
 
-  // Coverage model — uses effective fc_call as the gap basis
   const coverage = calcCoverageModel(
     cov.channels, fs.quota || 0, effective.fc_call || 0, d.weeks_remaining ?? 0
   )
 
-  // Rep breakdown from importedData
   const repRows = []
   if (fs.importedData?.length) {
     const grouped = {}
@@ -691,24 +789,19 @@ export async function exportCROPDF() {
       .forEach(r => repRows.push(r))
   }
 
-  const now       = new Date()
-  const todayStr  = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  const timestamp = now.toLocaleString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
-    hour: 'numeric', minute: '2-digit',
-  })
+  const gap              = Math.max(0, (fs.quota || 0) - (effective.fc_call || 0))
+  const ae               = coverage.channels['ae']  || null
+  const sdr              = coverage.channels['sdr'] || null
 
-  const data = {
+  return {
     managerName:   fs.managerName   || '',
     managerTeam:   fs.managerTeam   || '',
     quarterLabel:  fs.quarterLabel  || '',
     quota:         fs.quota         || 0,
     closed:        fs.closed        || 0,
-    // Effective (override-aware) FC values
     fc_worst_case: effective.fc_worst_case,
     fc_call:       effective.fc_call,
     fc_best_case:  effective.fc_best_case,
-    // Model FC values — shown in override footnote as reference
     fc_worst_case_model: d.fc_worst_case || 0,
     fc_call_model:       d.fc_call       || 0,
     fc_best_case_model:  d.fc_best_case  || 0,
@@ -717,7 +810,6 @@ export async function exportCROPDF() {
     bk_call:       d.bk_call        || 0,
     bk_bc:         d.bk_bc          || 0,
     cnc_prorated:  d.cnc_prorated   || 0,
-    // IQP inputs
     cnc_opps:        fs.cnc_opps          || 0,
     cnc_asp:         fs.cnc_asp           || 0,
     r_cnc:           fs.r_cnc             || 0,
@@ -725,24 +817,49 @@ export async function exportCROPDF() {
     prorationFactor: d.prorationFactor    ?? 1,
     weeks_remaining: d.weeks_remaining    ?? 0,
     weeks_total:     d.weeks_total        || 0,
+    weeksRemaining:  d.weeks_remaining    ?? 0,
+    gap,
+    total_saa_needed: (ae?.saas_needed || 0) + (sdr?.saas_needed || 0),
+    ae_allocation:  cov.channels['ae']  ? cov.channels['ae'].allocation  : 50,
+    ae_saa_needed:  ae  ? ae.saas_needed  : 0,
+    sdr_allocation: cov.channels['sdr'] ? cov.channels['sdr'].allocation : 50,
+    sdr_saa_needed: sdr ? sdr.saas_needed : 0,
+    vocabWorstCase: vocab.worst_case,
+    vocabCall:      vocab.call,
+    vocabBestCase:  vocab.best_case,
+    overridesActive: Object.values(fcOverrides).some(v => v !== null),
     priorSnap,
     wowDelta,
     importMeta:    fs.importMeta,
     repRows,
     channels:      cov.channels,
     coverage,
-    ae:  coverage.channels['ae']  || null,
-    sdr: coverage.channels['sdr'] || null,
+    ae,
+    sdr,
     vocab,
-    todayStr,
-    timestamp,
   }
+}
 
-  const blob = await pdf(<CROReadInDocument data={data} />).toBlob()
+// ── Export with pre-collected data + summary ──────────────────
+export async function exportCROPDFWithSummary(data, execSummary = '') {
+  const now       = new Date()
+  const todayStr  = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  const timestamp = now.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+  })
+  const docData = { ...data, execSummary, todayStr, timestamp }
+  const blob = await pdf(<CROReadInDocument data={docData} />).toBlob()
   const name = [
-    (fs.managerName  || 'Manager').replace(/\s+/g, '_'),
-    (fs.quarterLabel || 'Q').replace(/\s+/g, '_'),
+    (data.managerName  || 'Manager').replace(/\s+/g, '_'),
+    (data.quarterLabel || 'Q').replace(/\s+/g, '_'),
     'ReadIn.pdf',
   ].join('_')
   triggerDownload(blob, name)
+}
+
+// ── Export function (no-arg convenience wrapper) ───────────────
+export async function exportCROPDF() {
+  const data = collectPDFData()
+  await exportCROPDFWithSummary(data, '')
 }

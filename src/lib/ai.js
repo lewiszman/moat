@@ -1,5 +1,7 @@
 // ── Anthropic API ──────────────────────────────────────────────
 import { getVocab } from './vocab'
+import { fmt } from './fmt'
+import { useInspectorStore } from '../store/forecastStore'
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a sales coach reviewing open opportunities. Produce structured output only — no prose, no headers, no intro.
 
@@ -188,6 +190,77 @@ export async function fetchManagerInsights({ repsSorted, active, apiKey, systemP
     inputTokens:  data.usage?.input_tokens  || 0,
     outputTokens: data.usage?.output_tokens || 0,
   }
+}
+
+// ── Exec Summary for CRO PDF ───────────────────────────────────
+export async function fetchExecSummary(data, apiKey) {
+  const {
+    managerName, managerTeam, quarterLabel,
+    quota, fc_worst_case, fc_call, fc_best_case,
+    closed, weeksRemaining, weeks_total,
+    cnc_opps, cnc_asp, cnc_prorated,
+    gap, total_saa_needed,
+    ae_allocation, ae_saa_needed,
+    sdr_allocation, sdr_saa_needed,
+    vocabWorstCase, vocabCall, vocabBestCase,
+    overridesActive,
+  } = data
+
+  const systemPrompt = `You are writing a brief executive summary for a sales forecast read-in document. Write in plain, confident business prose. No bullet points. No headers. No markdown. 3–4 sentences maximum. Be specific with numbers — do not round or approximate. Write in third person (refer to 'the team' not 'I' or 'we'). Tone: direct, data-driven, no filler words.`
+
+  const userMsg = `Write an executive summary for the following forecast read-in. Use these exact figures:
+
+Manager: ${managerName} · Team: ${managerTeam}
+Quarter: ${quarterLabel}
+Quota: ${fmt(quota)}
+${vocabWorstCase} forecast: ${fmt(fc_worst_case)}
+${vocabCall} forecast (submission): ${fmt(fc_call)}
+${vocabBestCase} forecast: ${fmt(fc_best_case)}
+Closed QTD: ${fmt(closed)}
+Selling weeks remaining: ${weeksRemaining} of ${weeks_total}
+IQP (prorated C&C): ${cnc_opps} opps × ${fmt(cnc_asp)} ASP = ${fmt(cnc_prorated)} expected bookings
+Gap to quota: ${fmt(gap)}
+Total SAAs needed to close gap: ${total_saa_needed}
+AE channel: ${ae_allocation}% of gap = ${ae_saa_needed} SAAs required
+SDR channel: ${sdr_allocation}% of gap = ${sdr_saa_needed} SAAs required
+${overridesActive ? 'Note: submitted forecast reflects manager adjustments to model output.' : ''}
+
+Cover in this order:
+1. Team forecast position (${vocabCall} vs quota) and range (${vocabWorstCase} to ${vocabBestCase})
+2. IQP contribution and expected bookings
+3. Pipeline gap between ${vocabCall} FC and quota
+4. SAAs required split by AE and SDR`
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }],
+    }),
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `API error ${response.status}`)
+  }
+
+  const res          = await response.json()
+  const raw          = res.content?.[0]?.text || ''
+  const text         = raw.replace(/[*#>`]/g, '').trim()
+  const inputTokens  = res.usage?.input_tokens  || 0
+  const outputTokens = res.usage?.output_tokens || 0
+
+  useInspectorStore.getState().logUsage(inputTokens, outputTokens, 1, 0)
+
+  return { text, inputTokens, outputTokens }
 }
 
 // Token cost constants (claude-sonnet-4)
