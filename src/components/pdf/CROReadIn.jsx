@@ -23,14 +23,14 @@ const C = {
   border: '#e5e7eb',
 }
 
-// ── Coverage stage config ──────────────────────────────────────
+// ── Coverage stage config — standard 5 rows ───────────────────
+// Activities per AE / per SDR are rendered as explicit rows after these.
 const COV_STAGES = [
-  { label: 'Pipeline needed',   key: 'pipeline_needed',   wk: 'pipeline_per_week',           color: C.blue,    isPipe: true },
-  { label: 'SAAs needed',       key: 'saas_needed',       wk: 'saas_per_week',               color: C.blue },
-  { label: 'Opps needed',       key: 'opps_needed',       wk: 'opps_per_week',               color: '#0d7c3d' },
-  { label: 'Meetings needed',   key: 'meetings_needed',   wk: 'meetings_per_week',           color: C.amber },
-  { label: 'Activities needed', key: 'activities_needed', wk: 'activities_per_week',         color: C.coral },
-  { label: 'Activities/AE',     key: 'activities_per_ae', wk: 'activities_per_ae_per_week',  color: C.coral,   isPerAE: true },
+  { label: 'Pipeline needed',   key: 'pipeline_needed',   wk: 'pipeline_per_week',   color: C.blue,    isPipe: true },
+  { label: 'SAAs needed',       key: 'saas_needed',       wk: 'saas_per_week',       color: C.blue },
+  { label: 'Opps needed',       key: 'opps_needed',       wk: 'opps_per_week',       color: '#0d7c3d' },
+  { label: 'Meetings needed',   key: 'meetings_needed',   wk: 'meetings_per_week',   color: C.amber },
+  { label: 'Activities needed', key: 'activities_needed', wk: 'activities_per_week', color: C.coral },
 ]
 
 // ── Styles ─────────────────────────────────────────────────────
@@ -232,6 +232,7 @@ function CROReadInDocument({ data }) {
     priorSnap, wowDelta,
     importMeta, repRows,
     channels, coverage,
+    ae, sdr,
     todayStr, timestamp,
     vocab,
   } = data
@@ -251,9 +252,6 @@ function CROReadInDocument({ data }) {
 
   const callPct  = attPct(fc_call, quota)
   const pctColor = attColor(fc_call, quota)
-
-  // Both channels (ae, sdr) are always active
-  const enabledKeys = Object.keys(channels)
 
   // Pipeline rep totals
   const repTotals = repRows.reduce((acc, r) => ({
@@ -553,66 +551,83 @@ function CROReadInDocument({ data }) {
           {'Pipeline and activities needed in addition to IQP to close ' + fmtM(gap) + ' gap between ' + (v.call || 'Call') + ' FC and quota. IQP already reflected in forecast.'}
         </Text>
 
-        {/* Gap allocation row */}
+        {/* Gap allocation row — AE | SDR */}
         <View style={S.allocRow}>
-          {enabledKeys.map(k => {
-            const ch      = channels[k]
-            const chModel = coverage.channels[k] || {}
+          {[['ae', ae], ['sdr', sdr]].map(([k, chModel]) => {
+            const ch = channels[k] || {}
             return (
               <View key={k} style={S.allocCell}>
-                <Text style={S.allocName}>{ch.label}</Text>
-                <Text style={S.allocPct}>{ch.allocation}% of gap</Text>
+                <Text style={S.allocName}>{ch.label || k.toUpperCase()}</Text>
+                <Text style={S.allocPct}>{ch.allocation || 0}% of gap</Text>
                 <Text style={[S.allocGap, { color: gap > 0 ? C.coral : C.green }]}>
-                  {fmtM(chModel.channelGap || 0)}
+                  {fmtM(chModel?.channelGap || 0)}
                 </Text>
               </View>
             )
           })}
         </View>
 
-        {/* Coverage table */}
+        {/* Coverage table — Stage | AE | SDR | Total | Weekly Rate */}
         <View style={S.table}>
           <View style={S.thead}>
-            <Text style={[S.th, { flex: 1.8 }]}>Stage</Text>
-            {enabledKeys.map(k => (
-              <Text key={k} style={[S.th, { flex: 1.6, textAlign: 'right' }]}>{channels[k].label}</Text>
-            ))}
-            <Text style={[S.th, { flex: 1.4, textAlign: 'right' }]}>Total</Text>
-            <Text style={[S.th, { flex: 1.6, textAlign: 'right' }]}>Weekly rate</Text>
+            <Text style={[S.th, { flex: 2.2 }]}>Stage</Text>
+            <Text style={[S.th, { flex: 1.8, textAlign: 'right' }]}>AE</Text>
+            <Text style={[S.th, { flex: 1.8, textAlign: 'right' }]}>SDR</Text>
+            <Text style={[S.th, { flex: 1.6, textAlign: 'right' }]}>Total</Text>
+            <Text style={[S.th, { flex: 2.6, textAlign: 'right' }]}>Weekly rate</Text>
           </View>
 
           {COV_STAGES.map((stage, i) => {
-            const total   = stage.isPerAE
-              ? null
-              : enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.key] || 0), 0)
-            const totalWk = enabledKeys.reduce((s, k) => s + ((coverage.channels[k] || {})[stage.wk] || 0), 0)
+            const aeVal   = ae  ? (ae[stage.key]  || 0) : 0
+            const sdrVal  = sdr ? (sdr[stage.key] || 0) : 0
+            const total   = aeVal + sdrVal
+            const aeWk    = ae  ? (ae[stage.wk]   || 0) : 0
+            const sdrWk   = sdr ? (sdr[stage.wk]  || 0) : 0
+            const totalWk = aeWk + sdrWk
             const fmtVal  = (v) => stage.isPipe ? fmtM(v) : fmtN(v)
             const fmtWk   = (v) => stage.isPipe
               ? `${fmtM(Math.round(v / 1000) * 1000)}/wk`
               : `${Math.ceil(v)}/wk`
             return (
               <View key={stage.key} style={i % 2 === 1 ? S.trowAlt : S.trow}>
-                <Text style={[S.tdBold, { flex: 1.8, color: stage.color }]}>{stage.label}</Text>
-                {enabledKeys.map(k => (
-                  <Text key={k} style={[S.tdR, { flex: 1.6 }]}>
-                    {fmtVal((coverage.channels[k] || {})[stage.key] || 0)}
-                  </Text>
-                ))}
-                <Text style={[S.tdRB, { flex: 1.4 }]}>{total !== null ? fmtVal(total) : '\u2014'}</Text>
-                <Text style={[S.tdRB, { flex: 1.6, color: stage.color }]}>{fmtWk(totalWk)}</Text>
+                <Text style={[S.tdBold, { flex: 2.2, color: stage.color }]}>{stage.label}</Text>
+                <Text style={[S.tdR, { flex: 1.8 }]}>{fmtVal(aeVal)}</Text>
+                <Text style={[S.tdR, { flex: 1.8 }]}>{fmtVal(sdrVal)}</Text>
+                <Text style={[S.tdRB, { flex: 1.6 }]}>{fmtVal(total)}</Text>
+                <Text style={[S.tdRB, { flex: 2.6, color: stage.color }]}>{fmtWk(totalWk)}</Text>
               </View>
             )
           })}
+
+          {/* Activities per AE — AE column only, SDR shows — */}
+          <View style={S.trowAlt}>
+            <Text style={[S.tdBold, { flex: 2.2, color: C.coral, fontFamily: 'Helvetica-Oblique', paddingLeft: 10 }]}>Activities per AE</Text>
+            <Text style={[S.tdR, { flex: 1.8, color: C.coral }]}>{ae ? fmtN(ae.activities_per_ae) : '\u2014'}</Text>
+            <Text style={[S.tdR, { flex: 1.8, color: C.gray }]}>{'\u2014'}</Text>
+            <Text style={[S.tdRB, { flex: 1.6 }]}>{ae ? fmtN(ae.activities_per_ae) : '\u2014'}</Text>
+            <Text style={[S.tdRB, { flex: 2.6, color: C.coral }]}>{ae ? `${Math.ceil(ae.activities_per_ae_per_week)}/wk per AE` : '\u2014'}</Text>
+          </View>
+
+          {/* Activities per SDR — SDR column only, AE shows — */}
+          <View style={S.trow}>
+            <Text style={[S.tdBold, { flex: 2.2, color: C.coral, fontFamily: 'Helvetica-Oblique', paddingLeft: 10 }]}>Activities per SDR</Text>
+            <Text style={[S.tdR, { flex: 1.8, color: C.gray }]}>{'\u2014'}</Text>
+            <Text style={[S.tdR, { flex: 1.8, color: C.coral }]}>{sdr ? fmtN(sdr.activities_per_ae) : '\u2014'}</Text>
+            <Text style={[S.tdRB, { flex: 1.6 }]}>{sdr ? fmtN(sdr.activities_per_ae) : '\u2014'}</Text>
+            <Text style={[S.tdRB, { flex: 2.6, color: C.coral }]}>{sdr ? `${Math.ceil(sdr.activities_per_ae_per_week)}/wk per SDR` : '\u2014'}</Text>
+          </View>
         </View>
 
         {/* Assumptions footnote */}
-        <Text style={S.footnote}>
-          {'Rates: ' + enabledKeys.map(k => {
-            const ch = channels[k]
-            const actsPerMtg = ch.activity_to_meeting > 0 ? Math.round(1 / ch.activity_to_meeting) : 0
-            return `${ch.label} ${fmtM(ch.asp)} ASP \u00B7 ${ch.win_rate}% win \u00B7 ${actsPerMtg} acts/mtg \u00B7 ${ch.meeting_to_opp}% mtg\u2192opp \u00B7 ${ch.opp_to_saa}% opp\u2192SAA \u00B7 ${ch.headcount || 1} AEs`
-          }).join('   |   ')}
-        </Text>
+        {(() => {
+          const aeConf  = channels['ae']  || {}
+          const sdrConf = channels['sdr'] || {}
+          const actsAe  = aeConf.activity_to_meeting  > 0 ? Math.round(1 / aeConf.activity_to_meeting)  : 0
+          const actsSdr = sdrConf.activity_to_meeting > 0 ? Math.round(1 / sdrConf.activity_to_meeting) : 0
+          const aeStr  = `AE: ${fmtM(aeConf.asp)} ASP \u00B7 ${aeConf.win_rate}% win \u00B7 ${actsAe} acts/mtg \u00B7 ${aeConf.meeting_to_opp}% mtg\u2192opp \u00B7 ${aeConf.opp_to_saa}% opp\u2192SAA \u00B7 ${aeConf.headcount || 1} AEs`
+          const sdrStr = `SDR: ${fmtM(sdrConf.asp)} ASP \u00B7 ${sdrConf.win_rate}% win \u00B7 ${actsSdr} acts/mtg \u00B7 ${sdrConf.meeting_to_opp}% mtg\u2192opp \u00B7 ${sdrConf.opp_to_saa}% opp\u2192SAA \u00B7 ${sdrConf.headcount || 1} SDRs`
+          return <Text style={S.footnote}>{aeStr + '   |   ' + sdrStr}</Text>
+        })()}
 
         {/* ── FOOTER ────────────────────────────────────── */}
         <View style={S.footer}>
@@ -716,6 +731,8 @@ export async function exportCROPDF() {
     repRows,
     channels:      cov.channels,
     coverage,
+    ae:  coverage.channels['ae']  || null,
+    sdr: coverage.channels['sdr'] || null,
     vocab,
     todayStr,
     timestamp,
