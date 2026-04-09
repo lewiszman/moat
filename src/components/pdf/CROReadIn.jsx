@@ -19,10 +19,11 @@ const C = {
   white:  '#ffffff',
   ink:    '#111827',
   lBlue:  '#e8f0fe',
+  lBlue2: '#93c5fd',
   border: '#e5e7eb',
 }
 
-// ── Coverage stage config (Activity → Meeting → Opp → SAA → Pipeline) ──
+// ── Coverage stage config ──────────────────────────────────────
 const COV_STAGES = [
   { label: 'Pipeline needed',   key: 'pipeline_needed',   wk: 'pipeline_per_week',   color: C.blue,  isPipe: true },
   { label: 'SAAs needed',       key: 'saas_needed',       wk: 'saas_per_week',       color: C.blue },
@@ -46,8 +47,8 @@ const S = StyleSheet.create({
   // Header
   hdr: {
     backgroundColor: C.navy,
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 9,
+    paddingBottom: 9,
     paddingLeft: 14,
     paddingRight: 14,
     flexDirection: 'row',
@@ -55,7 +56,7 @@ const S = StyleSheet.create({
     alignItems: 'center',
     marginLeft: -28,
     marginRight: -28,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   hdrEyebrow: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.white, letterSpacing: 2, marginBottom: 2 },
   hdrName:    { fontSize: 9,  fontFamily: 'Helvetica-Bold', color: C.white },
@@ -69,19 +70,19 @@ const S = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     color: C.gray,
     letterSpacing: 1,
-    marginBottom: 4,
-    marginTop: 6,
+    marginBottom: 3,
+    marginTop: 4,
   },
 
   // Forecast tiers
-  tiersRow:   { flexDirection: 'row', marginBottom: 4 },
+  tiersRow:   { flexDirection: 'row', marginBottom: 3 },
   tierCol:    { flex: 1, paddingRight: 8 },
   tierDvdr:   { width: 0.5, backgroundColor: C.light, marginRight: 8 },
-  tierLbl:    { fontSize: 7, fontFamily: 'Helvetica-Bold', letterSpacing: 1, marginBottom: 3 },
+  tierLbl:    { fontSize: 7, fontFamily: 'Helvetica-Bold', letterSpacing: 1, marginBottom: 2 },
   tierAmt:    { fontFamily: 'Helvetica-Bold', marginBottom: 1 },
   tierAtt:    { fontSize: 8 },
   tierGap:    { fontSize: 7, marginTop: 1 },
-  tierChain:  { fontSize: 6, color: C.gray, marginTop: 3, lineHeight: 1.4 },
+  tierChain:  { fontSize: 6, color: C.gray, marginTop: 2, lineHeight: 1.4 },
 
   // WoW badge
   wowRow:   { flexDirection: 'row', alignItems: 'center', marginBottom: 1 },
@@ -101,9 +102,9 @@ const S = StyleSheet.create({
   wowWeek:  { fontSize: 6, color: C.gray, marginLeft: 3 },
 
   // Quota bar
-  qbarWrap:    { marginBottom: 4 },
-  qbarTrack:   { height: 7, backgroundColor: C.light, borderRadius: 2, flexDirection: 'row', marginBottom: 2 },
-  qbarPctRow:  { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 2 },
+  qbarWrap:    { marginBottom: 3 },
+  qbarTrack:   { height: 6, backgroundColor: C.light, borderRadius: 2, flexDirection: 'row', marginBottom: 2 },
+  qbarPctRow:  { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 1 },
   qbarPct:     { fontSize: 7, fontFamily: 'Helvetica-Bold' },
   qbarLegend:  { flexDirection: 'row', flexWrap: 'wrap' },
   qbarLegItem: { flexDirection: 'row', alignItems: 'center', marginRight: 10 },
@@ -111,25 +112,50 @@ const S = StyleSheet.create({
   qbarLegTxt:  { fontSize: 6, color: C.gray },
 
   // Tables
-  table:   { width: '100%', marginBottom: 3 },
-  thead:   { flexDirection: 'row', backgroundColor: C.light, paddingVertical: 3, paddingHorizontal: 4 },
+  table:   { width: '100%', marginBottom: 2 },
+  thead:   { flexDirection: 'row', backgroundColor: C.light, paddingVertical: 2, paddingHorizontal: 4 },
   th:      { fontSize: 7, fontFamily: 'Helvetica-Bold', color: C.gray, letterSpacing: 0.5 },
-  trow:    { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6' },
-  trowAlt: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6', backgroundColor: C.light },
-  trowTot: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 4, backgroundColor: C.lBlue, borderTop: '1 solid #1a56db' },
+  trow:    { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6' },
+  trowAlt: { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, borderBottom: '0.5 solid #f3f4f6', backgroundColor: C.light },
+  trowTot: { flexDirection: 'row', paddingVertical: 2, paddingHorizontal: 4, backgroundColor: C.lBlue, borderTop: '1 solid #1a56db' },
   td:      { fontSize: 8, color: '#374151' },
   tdBold:  { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink },
   tdR:     { fontSize: 8, color: '#374151', textAlign: 'right' },
   tdRB:    { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink, textAlign: 'right' },
 
   // Coverage allocation cells
-  allocRow:  { flexDirection: 'row', marginBottom: 5 },
-  allocCell: { flex: 1, backgroundColor: C.light, borderRadius: 2, paddingTop: 5, paddingBottom: 5, paddingLeft: 6, paddingRight: 6, marginRight: 4 },
+  allocRow:  { flexDirection: 'row', marginBottom: 3 },
+  allocCell: { flex: 1, backgroundColor: C.light, borderRadius: 2, paddingTop: 4, paddingBottom: 4, paddingLeft: 6, paddingRight: 6, marginRight: 4 },
   allocName: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 1 },
-  allocPct:  { fontSize: 7, color: C.gray, marginBottom: 2 },
-  allocGap:  { fontSize: 11, fontFamily: 'Helvetica-Bold' },
+  allocPct:  { fontSize: 7, color: C.gray, marginBottom: 1 },
+  allocGap:  { fontSize: 10, fontFamily: 'Helvetica-Bold' },
 
-  footnote: { fontSize: 6, color: C.gray, fontFamily: 'Helvetica-Oblique', marginTop: 3 },
+  footnote: { fontSize: 6, color: C.gray, fontFamily: 'Helvetica-Oblique', marginTop: 2 },
+
+  // ── IQP Band ──────────────────────────────────────────────────
+  iqpSubLbl: { fontSize: 6, color: C.gray, fontFamily: 'Helvetica-Oblique', marginBottom: 4, lineHeight: 1.4 },
+  iqpEmpty:  { fontSize: 7, color: C.gray, fontFamily: 'Helvetica-Oblique', textAlign: 'center', paddingVertical: 8 },
+  iqpBody:   { flexDirection: 'row', marginBottom: 3 },
+  iqpLeft:   { flex: 55, paddingRight: 8 },
+  iqpDvdr:   { width: 0.5, backgroundColor: C.light, marginRight: 8 },
+  iqpRight:  { flex: 45 },
+
+  // IQP chain rows
+  chainWrap:  { borderLeft: `1 solid ${C.lBlue2}`, paddingLeft: 8 },
+  chainRow:   { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 4 },
+  chainDot:   { width: 5, height: 5, borderRadius: 2.5, backgroundColor: C.blue, marginRight: 5, marginTop: 2, flexShrink: 0 },
+  chainContent: { flex: 1 },
+  chainLbl:   { fontSize: 6, color: C.gray, letterSpacing: 0.3, marginBottom: 1 },
+  chainVal:   { fontSize: 9, fontFamily: 'Helvetica-Bold', color: C.navy },
+  chainValHero: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.blue },
+  chainSub:   { fontSize: 6, color: C.gray, marginTop: 1 },
+  chainSubGreen: { fontSize: 6, color: C.green, marginTop: 1 },
+
+  // IQP stat cards
+  statCard:  { backgroundColor: C.light, borderRadius: 2, paddingVertical: 4, paddingLeft: 6, paddingRight: 4, marginBottom: 3 },
+  statLbl:   { fontSize: 6, color: C.gray, letterSpacing: 0.5, marginBottom: 2 },
+  statVal:   { fontSize: 10, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 1 },
+  statSub:   { fontSize: 6, color: C.gray },
 
   // Footer
   footer: {
@@ -138,7 +164,7 @@ const S = StyleSheet.create({
     left: 28,
     right: 28,
     borderTop: '0.5 solid #e5e7eb',
-    paddingTop: 5,
+    paddingTop: 4,
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
@@ -167,6 +193,31 @@ function triggerDownload(blob, filename) {
   URL.revokeObjectURL(url)
 }
 
+// ── IQP Chain Row ──────────────────────────────────────────────
+function ChainRow({ label, value, sub, subColor, valueStyle }) {
+  return (
+    <View style={S.chainRow}>
+      <View style={S.chainDot} />
+      <View style={S.chainContent}>
+        <Text style={S.chainLbl}>{label.toUpperCase()}</Text>
+        <Text style={valueStyle || S.chainVal}>{value}</Text>
+        {sub ? <Text style={subColor === 'green' ? S.chainSubGreen : S.chainSub}>{sub}</Text> : null}
+      </View>
+    </View>
+  )
+}
+
+// ── IQP Stat Card ──────────────────────────────────────────────
+function StatCard({ label, value, sub, borderColor }) {
+  return (
+    <View style={[S.statCard, { borderLeft: `3 solid ${borderColor}` }]}>
+      <Text style={S.statLbl}>{label.toUpperCase()}</Text>
+      <Text style={S.statVal}>{value}</Text>
+      <Text style={S.statSub}>{sub}</Text>
+    </View>
+  )
+}
+
 // ── Document component ─────────────────────────────────────────
 function CROReadInDocument({ data }) {
   const {
@@ -175,6 +226,8 @@ function CROReadInDocument({ data }) {
     fc_worst_case_model, fc_call_model, fc_best_case_model,
     overrideActive,
     bk_wc, bk_call, bk_bc, cnc_prorated,
+    cnc_opps, cnc_asp, r_cnc, cnc_pipe,
+    prorationFactor, weeks_remaining, weeks_total,
     priorSnap, wowDelta,
     importMeta, repRows,
     channels, coverage,
@@ -195,8 +248,8 @@ function CROReadInDocument({ data }) {
   const wCall   = Math.min((bk_call       / qTotal) * 100, Math.max(0, 100 - wClosed - wWC - wCnc))
   const wBC     = Math.min((bk_bc         / qTotal) * 100, Math.max(0, 100 - wClosed - wWC - wCnc - wCall))
 
-  const callPct   = attPct(fc_call, quota)
-  const pctColor  = attColor(fc_call, quota)
+  const callPct  = attPct(fc_call, quota)
+  const pctColor = attColor(fc_call, quota)
 
   const enabledKeys = Object.keys(channels).filter(k => channels[k].enabled)
 
@@ -210,13 +263,20 @@ function CROReadInDocument({ data }) {
     critical: acc.critical + r.critical,
   }), { closed: 0, wc: 0, call: 0, bc: 0, pipe: 0, critical: 0 })
 
-  // Override footnote text (appears once below tier row)
+  // Override footnote
   const overrideFootnoteLines = [
     overrideActive?.worst_case && `${v.worst_case || 'Worst Case'}: ${fmtM(fc_worst_case_model)} model`,
     overrideActive?.call       && `${v.call       || 'Call'}: ${fmtM(fc_call_model)} model`,
     overrideActive?.best_case  && `${v.best_case  || 'Best Case'}: ${fmtM(fc_best_case_model)} model`,
   ].filter(Boolean)
   const anyOverride = overrideFootnoteLines.length > 0
+
+  // IQP derived
+  const noInputs    = !cnc_opps || !cnc_asp
+  const noWeeks     = weeks_remaining === 0
+  const fullQuarter = prorationFactor >= 1
+  const prorPct     = Math.round((prorationFactor || 0) * 100)
+  const iqpPctOfGap = gap > 0 ? Math.round((cnc_prorated / gap) * 100) : null
 
   return (
     <Document>
@@ -244,7 +304,7 @@ function CROReadInDocument({ data }) {
             <Text style={[S.tierLbl, { color: C.blue }]}>
               {(v.worst_case || 'Worst Case').toUpperCase()}{overrideActive?.worst_case ? ' †' : ''}
             </Text>
-            <Text style={[S.tierAmt, { fontSize: 18, color: C.blue }]}>{fmtM(fc_worst_case)}</Text>
+            <Text style={[S.tierAmt, { fontSize: 17, color: C.blue }]}>{fmtM(fc_worst_case)}</Text>
             <Text style={[S.tierAtt, { color: C.blue }]}>{attPct(fc_worst_case, quota)}% of quota</Text>
             <Text style={[S.tierGap, { color: fc_worst_case >= quota ? C.green : C.coral }]}>
               {fc_worst_case >= quota ? 'On track' : `${fmtM(quota - fc_worst_case)} gap`}
@@ -259,13 +319,13 @@ function CROReadInDocument({ data }) {
 
           <View style={S.tierDvdr} />
 
-          {/* Call FC — primary, with WoW badge */}
+          {/* Call FC */}
           <View style={S.tierCol}>
             <Text style={[S.tierLbl, { color: C.blue }]}>
               {(v.call || 'Call').toUpperCase()}{overrideActive?.call ? ' †' : ''}
             </Text>
             <View style={S.wowRow}>
-              <Text style={[S.tierAmt, { fontSize: 22, color: C.blue }]}>{fmtM(fc_call)}</Text>
+              <Text style={[S.tierAmt, { fontSize: 20, color: C.blue }]}>{fmtM(fc_call)}</Text>
               {wowDelta !== null && (
                 <View style={S.wowBadge}>
                   <Text style={[S.wowDelta, { color: wowDelta >= 0 ? C.green : C.coral }]}>
@@ -294,7 +354,7 @@ function CROReadInDocument({ data }) {
             <Text style={[S.tierLbl, { color: C.amber }]}>
               {(v.best_case || 'Best Case').toUpperCase()}{overrideActive?.best_case ? ' †' : ''}
             </Text>
-            <Text style={[S.tierAmt, { fontSize: 18, color: C.amber }]}>{fmtM(fc_best_case)}</Text>
+            <Text style={[S.tierAmt, { fontSize: 17, color: C.amber }]}>{fmtM(fc_best_case)}</Text>
             <Text style={[S.tierAtt, { color: C.amber }]}>{attPct(fc_best_case, quota)}% of quota</Text>
             <Text style={[S.tierGap, { color: fc_best_case >= quota ? C.green : C.coral }]}>
               {fc_best_case >= quota ? 'On track' : `${fmtM(quota - fc_best_case)} gap`}
@@ -310,7 +370,7 @@ function CROReadInDocument({ data }) {
 
         {/* Override footnote */}
         {anyOverride && (
-          <Text style={[S.footnote, { marginBottom: 3 }]}>
+          <Text style={[S.footnote, { marginBottom: 2 }]}>
             {'† Submitted forecast — adjusted from model output · ' + overrideFootnoteLines.join(' · ')}
           </Text>
         )}
@@ -398,7 +458,89 @@ function CROReadInDocument({ data }) {
           )}
         </View>
 
-        {/* ── BAND 3: COVERAGE PLAN ─────────────────────── */}
+        {/* ── BAND 3: EXPECTED IQP ─────────────────────── */}
+        <Text style={S.bandLbl}>EXPECTED IQP  {'\u00B7'}  IN-QUARTER PIPELINE</Text>
+        <Text style={S.iqpSubLbl}>
+          {'Create & close opportunities expected to be sourced and closed within ' + (quarterLabel || 'this quarter') + '.  Prorated for ' + weeks_remaining + ' of ' + weeks_total + ' selling weeks.'}
+        </Text>
+
+        {noInputs ? (
+          <Text style={S.iqpEmpty}>
+            No C&amp;C inputs configured. Set Create &amp; Close assumptions in Manager Walk-Up.
+          </Text>
+        ) : (
+          <View style={S.iqpBody}>
+            {/* LEFT — arithmetic chain */}
+            <View style={S.iqpLeft}>
+              <View style={S.chainWrap}>
+                <ChainRow
+                  label="Qualified opps to create"
+                  value={String(cnc_opps) + ' opps'}
+                />
+                <ChainRow
+                  label="Average deal size (ASP)"
+                  value={fmtM(cnc_asp)}
+                />
+                <ChainRow
+                  label="Full-quarter pipeline"
+                  value={fmtM(cnc_pipe)}
+                  valueStyle={[S.chainVal, { color: C.blue }]}
+                  sub={cnc_opps + ' \u00D7 ' + fmtM(cnc_asp)}
+                />
+                {fullQuarter ? (
+                  <ChainRow
+                    label="Win rate"
+                    value={String(r_cnc) + '%'}
+                    sub="Full-quarter value — no proration applied"
+                  />
+                ) : (
+                  <ChainRow
+                    label={'Win rate  \u00B7  Proration factor'}
+                    value={String(r_cnc) + '%  \u00B7  ' + prorPct + '%'}
+                    sub={weeks_remaining + ' of ' + weeks_total + ' selling weeks'}
+                  />
+                )}
+                <ChainRow
+                  label="Expected IQP bookings"
+                  value={noWeeks ? '$0' : fmtM(cnc_prorated)}
+                  valueStyle={S.chainValHero}
+                  sub={noWeeks
+                    ? 'No selling weeks remaining — C&C contribution exhausted.'
+                    : 'Included in ' + (v.worst_case || 'Worst Case') + ' forecast'
+                  }
+                  subColor={noWeeks ? undefined : 'green'}
+                />
+              </View>
+            </View>
+
+            {/* Divider */}
+            <View style={S.iqpDvdr} />
+
+            {/* RIGHT — stat cards */}
+            <View style={S.iqpRight}>
+              <StatCard
+                label="IQP as % of gap"
+                value={iqpPctOfGap !== null ? String(iqpPctOfGap) + '%' : '\u2014'}
+                sub={gap > 0 ? fmtM(cnc_prorated) + ' of ' + fmtM(gap) + ' gap' : 'No gap to cover'}
+                borderColor={C.blue}
+              />
+              <StatCard
+                label="Selling weeks remaining"
+                value={weeks_remaining + ' of ' + weeks_total}
+                sub={prorPct + '% of full-quarter value'}
+                borderColor={C.amber}
+              />
+              <StatCard
+                label={'In ' + (v.worst_case || 'Worst Case') + ' FC'}
+                value={fmtM(cnc_prorated)}
+                sub={'of ' + fmtM(fc_worst_case) + ' total'}
+                borderColor={C.green}
+              />
+            </View>
+          </View>
+        )}
+
+        {/* ── BAND 4: COVERAGE PLAN ─────────────────────── */}
         <Text style={S.bandLbl}>
           <Text>{'COVERAGE PLAN  \u00B7  GAP TO QUOTA: '}</Text>
           <Text style={{ color: gap > 0 ? C.coral : C.green }}>
@@ -483,7 +625,7 @@ export async function exportCROPDF() {
   const wow = useWowStore.getState()
   const cov = useCoverageStore.getState()
 
-  // Vocab — read at export time so PDF always reflects current labels
+  // Vocab — read at export time
   const vocab = getVocab()
 
   // Effective FC — applies any active submission overrides
@@ -552,7 +694,14 @@ export async function exportCROPDF() {
     bk_call:       d.bk_call        || 0,
     bk_bc:         d.bk_bc          || 0,
     cnc_prorated:  d.cnc_prorated   || 0,
-    weeks_remaining: d.weeks_remaining ?? 0,
+    // IQP inputs
+    cnc_opps:        fs.cnc_opps          || 0,
+    cnc_asp:         fs.cnc_asp           || 0,
+    r_cnc:           fs.r_cnc             || 0,
+    cnc_pipe:        d.cnc_pipe           || 0,
+    prorationFactor: d.prorationFactor    ?? 1,
+    weeks_remaining: d.weeks_remaining    ?? 0,
+    weeks_total:     d.weeks_total        || 0,
     priorSnap,
     wowDelta,
     importMeta:    fs.importMeta,
