@@ -102,14 +102,14 @@ function GapSummaryBar({ quota, fc_call, weeksRemaining, weeks_total, gapOverrid
 
         {/* Call FC */}
         <div className="px-4 py-3">
-          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Call FC</div>
+          <div className="text-[11px] text-[var(--tx2)] mb-0.5">Bookings from Entering Pipeline</div>
           <div className="text-[20px] font-[700] text-[var(--tx)]">{fmt(fc_call)}</div>
         </div>
 
         {/* Gap — editable */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className="text-[11px] text-[var(--tx2)]">Gap</span>
+            <span className="text-[11px] text-[var(--tx2)]">Bookings Gap from IQP</span>
             {isOverride && (
               <span className="text-[9px] font-[700] uppercase tracking-wider px-1.5 py-px rounded-full bg-amber-100 text-amber-700 border border-amber-200">
                 override
