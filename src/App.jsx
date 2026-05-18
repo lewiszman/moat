@@ -12,7 +12,6 @@ import ManagerView from './components/ManagerView/ManagerView'
 import Inspector from './components/Inspector/Inspector'
 import DealBacking from './components/DealBacking/DealBacking'
 import Settings from './components/Settings/Settings'
-import RepView from './components/RepView/RepView'
 import CoverageView from './components/Coverage/CoverageView'
 
 export default function App() {
@@ -100,7 +99,6 @@ export default function App() {
           {activeView === 'inspector' && <Inspector />}
           {activeView === 'dealback'  && <DealBacking />}
           {activeView === 'coverage'  && <CoverageView />}
-          {activeView === 'repview'   && <RepView />}
           {activeView === 'settings'  && <Settings />}
         </main>
       </div>
