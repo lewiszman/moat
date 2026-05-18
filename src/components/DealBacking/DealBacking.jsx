@@ -343,7 +343,9 @@ export default function DealBacking() {
     return pos
   }, [deals, positions])
 
-  const closedAmt = deals.filter(d => d.closed).reduce((s, d) => s + d.acv, 0)
+  const closedAmt = deals
+    .filter(d => d.closed && (!activeMonth || isCloseInMonth({ f_close_date: d.closeDate }, activeMonth)))
+    .reduce((s, d) => s + d.acv, 0)
 
   // Active month for filtering
   const activeMonth = monthFilter !== 'all'
