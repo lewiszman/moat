@@ -3,39 +3,58 @@ import { getVocab } from './vocab'
 import { fmt } from './fmt'
 import { useInspectorStore } from '../store/forecastStore'
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a sales coach reviewing open opportunities. Produce structured output only — no prose, no headers, no intro.
+export const DEFAULT_SYSTEM_PROMPT = `You are an elite sales coach reviewing B2B SaaS opportunities. Apply MEDDPICC, Command of the Message (3 Whys), and Winning by Design (MAP / next-step discipline). Produce structured output only — no prose, no headers, no intro.
 
-For each deal where you find an issue, output one line:
-DEAL: {exact deal name} | FLAG: {one of: missing date, past date, not tangible, weak next step, stale activity, close date risk, no meddpicc} | NOTE: {one sentence max 12 words}
+For each deal with an issue, output exactly one line:
+DEAL: {exact deal name} | RISK: {critical|high|medium} | FRAMEWORK: {MEDDPICC|CoTM|WbD|Execution} | FLAG: {flag type} | NOTE: {≤15 words, specific and actionable}
 
-Issues to flag:
-1. missing date — next step has no specific date
-2. past date — the date in the next step has already passed
-3. not tangible — vague or generic (e.g. "follow up", "check in", "waiting to hear back")
-4. weak next step — lacks specificity about who, what, or when
-5. stale activity — last activity was 14+ days ago on a high-confidence deal
-6. close date risk — close date is within 30 days but the next step lacks a concrete commitment action
-7. no meddpicc — high-confidence deal with $50k+ value but zero MEDDPICC fields filled
+Flag types:
+- next_step_weak: vague, no date, no named owner, or generic ("follow up", "check in", "waiting")
+- next_step_stale: date in next step has passed, or last activity 14d+ ago on high-confidence deal
+- meddpicc_gap: specific letter missing or too shallow — name the letter (e.g. "M gap: no quantified metric")
+- no_3whys: implicated pain or urgency not clearly articulated; 3 Whys incomplete
+- competitor_risk: named competitor has a pricing or feature advantage not yet addressed
+- wrong_stakeholder: engaging below economic buyer level with no multi-thread plan
+- no_map: Forecast/Commit deal with no mutual action plan
+- stuck: deal has not advanced in stage for 30+ days
+- forecast_risk: FC category is inconsistent with stage or deal signals
 
-Only output lines for deals with issues. If all are strong, output nothing except:
-SUMMARY: Next steps are well-maintained and specific.`
+Only flag real issues — do not manufacture flags on clean deals. If a deal has no issues, skip it.
+
+After all DEAL lines, always output:
+SUMMARY: {1–2 sentences on the most common gap pattern across this rep's deals}`
 
 export const DEFAULT_COACHING_FOCUS = ''
 
 // ── AI flag output parser ──────────────────────────────────────
 // Parses lines of the form:
-//   DEAL: {name} | FLAG: {flag} | NOTE: {note}
+//   DEAL: {name} | RISK: {risk} | FRAMEWORK: {fw} | FLAG: {flag} | NOTE: {note}
+// Also handles legacy format without RISK/FRAMEWORK fields.
 export function parseAIFlags(text) {
-  const flags   = {}   // { [dealNameLower]: { flag, note } }
+  const flags   = {}   // { [dealNameLower]: { flag, risk, framework, note } }
   let   summary = ''
   if (!text) return { flags, summary }
 
   text.split('\n').forEach(line => {
-    const dealMatch = line.match(/^DEAL:\s*(.+?)\s*\|\s*FLAG:\s*(.+?)\s*\|\s*NOTE:\s*(.+)$/)
-    if (dealMatch) {
-      flags[dealMatch[1].trim().toLowerCase()] = {
-        flag: dealMatch[2].trim(),
-        note: dealMatch[3].trim(),
+    // New format with RISK + FRAMEWORK
+    const fullMatch = line.match(/^DEAL:\s*(.+?)\s*\|\s*RISK:\s*(.+?)\s*\|\s*FRAMEWORK:\s*(.+?)\s*\|\s*FLAG:\s*(.+?)\s*\|\s*NOTE:\s*(.+)$/)
+    if (fullMatch) {
+      flags[fullMatch[1].trim().toLowerCase()] = {
+        flag:      fullMatch[4].trim(),
+        risk:      fullMatch[2].trim(),
+        framework: fullMatch[3].trim(),
+        note:      fullMatch[5].trim(),
+      }
+      return
+    }
+    // Legacy format: DEAL | FLAG | NOTE
+    const legacyMatch = line.match(/^DEAL:\s*(.+?)\s*\|\s*FLAG:\s*(.+?)\s*\|\s*NOTE:\s*(.+)$/)
+    if (legacyMatch) {
+      flags[legacyMatch[1].trim().toLowerCase()] = {
+        flag: legacyMatch[2].trim(),
+        risk: 'medium',
+        framework: 'Execution',
+        note: legacyMatch[3].trim(),
       }
       return
     }
@@ -109,10 +128,23 @@ export async function fetchAISummary({
           return `${d.f_last_activity} (${daysSince}d ago)`
         })()
       : '(none)'
-    const meddpiccFields = ['f_metrics', 'f_econ_buyer', 'f_dec_criteria', 'f_dec_process', 'f_proc_process', 'f_implicated', 'f_champion']
-    const meddpiccFilled = meddpiccFields.filter(k => (d[k] || '').trim()).length
-    const topFlags = (d._flags || []).slice(0, 3).map(f => f.label).join(', ')
-    return `- ${d.f_opp_name || 'Unknown'} | ${d.f_fc_cat_norm || '?'} | ${d.f_stage || '?'} | $${Math.round((d.f_amount_num || 0) / 1000)}k | close: ${closeDate} | last activity: ${lastAct} | MEDDPICC: ${meddpiccFilled}/7 | flags: ${topFlags || 'none'} | next step: ${d.f_next_step?.trim() || '(none)'}`
+    const meddpiccDetail = [
+      d.f_metrics      ? `M: "${(d.f_metrics).substring(0, 80)}"` : 'M: empty',
+      d.f_econ_buyer   ? `E: "${(d.f_econ_buyer).substring(0, 60)}"` : 'E: empty',
+      d.f_dec_criteria ? 'DC: filled' : 'DC: empty',
+      d.f_dec_process  ? 'DP: filled' : 'DP: empty',
+      d.f_implicated   ? `I: "${(d.f_implicated).substring(0, 80)}"` : 'I: empty',
+      d.f_champion     ? `C: "${(d.f_champion).substring(0, 40)}"` : 'C: empty',
+    ].join(' | ')
+    const topFlags = (d._flags || []).slice(0, 4).map(f => f.label).join(', ')
+    return [
+      `- ${d.f_opp_name || 'Unknown'} | ${d.f_fc_cat_norm || '?'} | ${d.f_stage || '?'} | $${Math.round((d.f_amount_num || 0) / 1000)}k`,
+      `  close: ${closeDate} | last_activity: ${lastAct} | days_in_stage: ${d.f_days_in_stage || 'unknown'}`,
+      `  competitor: ${(d.f_competitor || '').trim() || 'none identified'} | MAP: ${d.f_has_map ? 'yes' : 'no'} | contact_title: ${d.f_contact_title || 'unknown'} | lead_type: ${d.f_lead_type || '?'}`,
+      `  MEDDPICC: ${meddpiccDetail}`,
+      `  rule_flags: ${topFlags || 'none'}`,
+      `  next_step: ${d.f_next_step?.trim() || '(none)'}`,
+    ].join('\n')
   }).join('\n')
 
   const userMsg = `AE: ${owner}\nOpportunities (${actionableDeals.length}):\n${dealLines}${focusLine}`
@@ -130,7 +162,7 @@ export async function fetchAISummary({
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 600,
+      max_tokens: 1200,
       system: [{ type: 'text', text: fullPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: userMsg }],
     }),
@@ -153,6 +185,95 @@ export async function fetchAISummary({
   const { flags, summary } = parseAIFlags(text)
   // Keep actions empty — no longer used
   return { text, flags, summary, actions: {}, inputTokens, outputTokens }
+}
+
+// ── Single-deal deep inspection ───────────────────────────────
+export async function fetchDealInspection({ deal, apiKey, signal }) {
+  const systemPrompt = `You are an elite sales coach. Analyse this single opportunity and return exactly 5 labelled lines — no prose, no headers, nothing else.
+
+Line format:
+NEXT_STEP: rating={strong|weak|missing} | {specific gap or confirmation in ≤15 words}
+3WHYS: why_change={filled|gap} | why_now={filled|gap} | why_remote={filled|gap} | {≤15 words on weakest why}
+MEDDPICC: score={N}/7 | gaps={comma-separated missing letters or "none"} | {≤15 words on highest-risk gap}
+COMPETITIVE: threat={high|medium|low|none} | competitor={name or "none"} | {≤15 words on positioning gap or strength}
+ACTION: {single most important next action for the AE in ≤20 words}`
+
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  const cd = deal.f_close_date ? new Date(deal.f_close_date) : null
+  const daysLeft = cd ? Math.round((cd - now) / 86400000) : null
+  const la = deal.f_last_activity ? new Date(deal.f_last_activity) : null
+  const daysSinceActivity = la ? Math.round((now - la) / 86400000) : null
+
+  const userMsg = [
+    `Deal: ${deal.f_opp_name || 'Unknown'}`,
+    `AE: ${deal.f_owner || deal._owner || '?'} | FC: ${deal.f_fc_cat_norm || '?'} | Stage: ${deal.f_stage || '?'}`,
+    `Amount: $${Math.round((deal.f_amount_num || 0) / 1000)}k | Close: ${deal.f_close_date || 'none'}${daysLeft !== null ? ` (${daysLeft >= 0 ? daysLeft + 'd left' : Math.abs(daysLeft) + 'd past'})` : ''}`,
+    `Days in stage: ${deal.f_days_in_stage || 'unknown'} | Deal age: ${deal.f_age || 'unknown'}d | Last activity: ${daysSinceActivity !== null ? daysSinceActivity + 'd ago' : 'unknown'}`,
+    `Lead type: ${deal.f_lead_type || '?'} | Product: ${deal.f_product_interest || '?'} | Revenue motion: ${deal.f_revenue_motion || '?'}`,
+    `Competitor: ${(deal.f_competitor || '').trim() || 'none identified'}`,
+    `MAP: ${deal.f_has_map ? `yes — ${deal.f_map}` : 'no'} | Win Room: ${deal.f_has_win_room ? 'yes' : 'no'}`,
+    `Contact: ${deal.f_primary_contact || deal.f_champion || '?'} (${deal.f_contact_title || 'title unknown'})`,
+    ``,
+    `NEXT STEP:`,
+    deal.f_next_step?.trim() || '(none)',
+    ``,
+    `MEDDPICC:`,
+    `  M (Metrics): ${deal.f_metrics?.trim() || '(empty)'}`,
+    `  E (Economic Buyer): ${deal.f_econ_buyer?.trim() || '(empty)'}`,
+    `  DC (Decision Criteria): ${deal.f_dec_criteria?.trim() || '(empty)'}`,
+    `  DP (Decision Process): ${deal.f_dec_process?.trim() || '(empty)'}`,
+    `  PP (Procurement): ${deal.f_proc_process?.trim() || '(empty)'}`,
+    `  I (Implicated Pain): ${deal.f_implicated?.trim() || '(empty)'}`,
+    `  C (Champion): ${deal.f_champion?.trim() || '(empty)'}`,
+    deal.f_meddpicc_notes?.trim() ? `\nMEDDPICC Rep Notes: ${deal.f_meddpicc_notes.trim()}` : '',
+    deal.f_manager_notes?.trim()  ? `\nManager Notes: ${deal.f_manager_notes.substring(0, 400).trim()}` : '',
+    deal.f_sdr_notes?.trim()      ? `\nSDR Notes: ${deal.f_sdr_notes.substring(0, 200).trim()}` : '',
+  ].filter(Boolean).join('\n')
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMsg }],
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    throw new Error(err?.error?.message || `API error ${response.status}`)
+  }
+
+  const data         = await response.json()
+  const raw          = data.content?.[0]?.text || ''
+  const inputTokens  = data.usage?.input_tokens  || 0
+  const outputTokens = data.usage?.output_tokens || 0
+
+  // Parse the 5 structured lines
+  const result = { nextStep: null, threeWhys: null, meddpicc: null, competitive: null, action: null, raw }
+  raw.split('\n').forEach(line => {
+    const nsMatch   = line.match(/^NEXT_STEP:\s*rating=(\S+)\s*\|\s*(.+)$/)
+    const wyMatch   = line.match(/^3WHYS:\s*why_change=(\S+)\s*\|\s*why_now=(\S+)\s*\|\s*why_remote=(\S+)\s*\|\s*(.+)$/)
+    const mdMatch   = line.match(/^MEDDPICC:\s*score=(\S+)\s*\|\s*gaps=(.+?)\s*\|\s*(.+)$/)
+    const compMatch = line.match(/^COMPETITIVE:\s*threat=(\S+)\s*\|\s*competitor=(.+?)\s*\|\s*(.+)$/)
+    const actMatch  = line.match(/^ACTION:\s*(.+)$/)
+    if (nsMatch)   result.nextStep    = { rating: nsMatch[1],   note: nsMatch[2].trim() }
+    if (wyMatch)   result.threeWhys   = { whyChange: wyMatch[1], whyNow: wyMatch[2], whyRemote: wyMatch[3], note: wyMatch[4].trim() }
+    if (mdMatch)   result.meddpicc    = { score: mdMatch[1],    gaps: mdMatch[2].trim(), note: mdMatch[3].trim() }
+    if (compMatch) result.competitive = { threat: compMatch[1], competitor: compMatch[2].trim(), note: compMatch[3].trim() }
+    if (actMatch)  result.action      = actMatch[1].trim()
+  })
+
+  return { ...result, inputTokens, outputTokens }
 }
 
 // ── Manager-level team insights ────────────────────────────────

@@ -86,22 +86,40 @@ export function calcMonthlyBreakdown(importedData, fyStartMonth = 1, isNextQuart
 }
 
 const DEFAULT_COL_MAP = {
-  'Opportunity Name':         'f_opp_name',
-  'Account Name':             'f_account',
-  'Owner':                    'f_owner',
-  'Amount':                   'f_amount',
-  'Close Date':               'f_close_date',
-  'Stage':                    'f_stage',
-  'Forecast Category':        'f_fc_cat',
-  'Next Step':                'f_next_step',
-  'Account: Last Activity':   'f_last_activity',
-  'Metrics':                  'f_metrics',
-  'Economic Buyer':           'f_econ_buyer',
-  'Decision Criteria':        'f_dec_criteria',
-  'Decision Process':         'f_dec_process',
-  'Procurement Process':      'f_proc_process',
-  'Implicated Pain':          'f_implicated',
-  'Champion':                 'f_champion',
+  'Opportunity Name':                       'f_opp_name',
+  'Account Name':                           'f_account',
+  'Owner':                                  'f_owner',
+  'Opportunity Owner':                      'f_owner',
+  'Amount':                                 'f_amount',
+  'Average Annual Booking (converted)':     'f_amount',
+  'Close Date':                             'f_close_date',
+  'Stage':                                  'f_stage',
+  'Forecast Category':                      'f_fc_cat',
+  'Next Step':                              'f_next_step',
+  'Account: Last Activity':                 'f_last_activity',
+  'Metrics':                                'f_metrics',
+  'Economic Buyer':                         'f_econ_buyer',
+  'Decision Criteria':                      'f_dec_criteria',
+  'Decision Process':                       'f_dec_process',
+  'Procurement Process':                    'f_proc_process',
+  'Implicated Pain':                        'f_implicated',
+  'Champion':                               'f_champion',
+  'Type of Lead':                           'f_lead_type',
+  'Product Interest':                       'f_product_interest',
+  'Competitor':                             'f_competitor',
+  'MEDDPICC Rep Notes':                     'f_meddpicc_notes',
+  'Manager Notes':                          'f_manager_notes',
+  'SDR Notes':                              'f_sdr_notes',
+  'Days in Current Stage':                  'f_days_in_stage',
+  'Age':                                    'f_age',
+  'Contact: Title':                         'f_contact_title',
+  'Win Room (WR)':                          'f_win_room',
+  'Mutual Action Plan (MAP)':               'f_map',
+  'Solution Consultant Involvement':        'f_sc_involvement',
+  'Solution Consultant Notes':              'f_sc_notes',
+  'Revenue Motion':                         'f_revenue_motion',
+  'Direct Referral Partner':                'f_ref_partner',
+  'Primary Contact':                        'f_primary_contact',
 }
 
 // normalizeFcCat — resolves a raw CSV forecast category value to an internal key.
@@ -153,11 +171,16 @@ export function normalizeRecords(rows, colMap = DEFAULT_COL_MAP, catMap = DEFAUL
       if (mapped) d[mapped] = v
     })
     // Normalize derived fields
-    d.f_amount_num = parseAmount(d.f_amount || 0)
+    d.f_amount_num   = parseAmount(d.f_amount || 0)
     const catResult  = normalizeFcCat(d.f_fc_cat, catMap)
     d.f_fc_cat_norm  = catResult.key
     d._rawFcCat      = (d.f_fc_cat || '').trim()
     d._unmapped      = catResult.unmapped || false
+    d.f_days_in_stage = parseFloat(d.f_days_in_stage) || 0
+    d.f_age           = parseFloat(d.f_age) || 0
+    d.f_sc_involvement = d.f_sc_involvement === '1' || d.f_sc_involvement === 1 || d.f_sc_involvement === true
+    d.f_has_map       = !!(d.f_map && String(d.f_map).trim())
+    d.f_has_win_room  = !!(d.f_win_room && String(d.f_win_room).trim())
     return d
   }).filter(d => d.f_opp_name || d.f_account)
 }

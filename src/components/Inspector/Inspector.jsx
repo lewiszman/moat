@@ -2,7 +2,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react'
 import { useForecastStore, useInspectorStore, useSectionComments } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { flagDeal, groupByRep, dealWeight, FLAG_DEF_LIST } from '../../lib/flags'
-import { fetchAISummary, fetchManagerInsights, findDealAction, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
+import { fetchAISummary, fetchDealInspection, fetchManagerInsights, findDealAction, parseAIFlags, DEFAULT_SYSTEM_PROMPT, COST_PER_INPUT_TOKEN, COST_PER_OUTPUT_TOKEN } from '../../lib/ai'
 import { formatSlackMessage } from '../../lib/slackFormatter'
 import { getVocab, useVocabStore } from '../../lib/vocab'
 import UnmappedBanner from '../shared/UnmappedBanner'
@@ -164,7 +164,18 @@ function FlagChip({ flag }) {
 
 // ── Deal row ──────────────────────────────────────────────────
 
-function DealRow({ deal, cols, repResult }) {
+const AI_RISK_COLORS = {
+  critical: 'text-red-700 dark:text-red-300',
+  high:     'text-amber-700 dark:text-amber-300',
+  medium:   'text-yellow-700 dark:text-yellow-400',
+}
+const AI_RISK_BG = {
+  critical: 'bg-red-50 dark:bg-red-950/30',
+  high:     'bg-amber-50 dark:bg-amber-950/30',
+  medium:   'bg-yellow-50 dark:bg-yellow-950/30',
+}
+
+function DealRow({ deal, cols, repResult, onOpen }) {
   const now = new Date()
   now.setHours(0, 0, 0, 0)
   const hasCrit  = (deal._flags || []).some(f => f.sev === 'critical')
@@ -181,12 +192,18 @@ function DealRow({ deal, cols, repResult }) {
   const { comments, setComment } = useSectionComments()
   const noteVal  = comments[noteKey] || ''
 
+  const daysInStage = deal.f_days_in_stage || 0
+  const competitor  = (deal.f_competitor || '').trim()
+
   return (
-    <tr className={`border-b border-[var(--bdr2)] last:border-0 hover:bg-[var(--bg2)] transition-colors ${hasCrit ? 'bg-red-50/30 dark:bg-red-950/10' : ''}`}>
-      {cols.ae       && <td className="px-3 py-2 text-[12px] font-[500] text-[var(--tx2)] whitespace-nowrap">{deal._owner}</td>}
-      {cols.deal     && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] max-w-[200px] truncate" title={deal.f_opp_name}>{deal.f_opp_name || '—'}</td>}
-      {cols.amount   && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] whitespace-nowrap text-right">{fmt(deal.f_amount_num)}</td>}
-      {cols.close    && (
+    <tr
+      onClick={() => onOpen && onOpen(deal)}
+      className={`border-b border-[var(--bdr2)] last:border-0 hover:bg-[var(--bg2)] transition-colors cursor-pointer ${hasCrit ? 'bg-red-50/30 dark:bg-red-950/10' : ''}`}
+    >
+      {cols.ae         && <td className="px-3 py-2 text-[12px] font-[500] text-[var(--tx2)] whitespace-nowrap">{deal._owner}</td>}
+      {cols.deal       && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] max-w-[200px] truncate" title={deal.f_opp_name}>{deal.f_opp_name || '—'}</td>}
+      {cols.amount     && <td className="px-3 py-2 text-[12px] font-[600] text-[var(--tx)] whitespace-nowrap text-right">{fmt(deal.f_amount_num)}</td>}
+      {cols.close      && (
         <td className={`px-3 py-2 text-[12px] whitespace-nowrap font-[500] ${cdPast ? 'text-red-600' : cdNear ? 'text-amber-600' : 'text-[var(--tx2)]'}`}>
           {cdStr}
           {deal._slippageDays > 0 && (
@@ -196,15 +213,15 @@ function DealRow({ deal, cols, repResult }) {
           )}
         </td>
       )}
-      {cols.stage    && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] whitespace-nowrap max-w-[120px] truncate" title={deal.f_stage}>{deal.f_stage || '—'}</td>}
-      {cols.fc       && (
+      {cols.stage      && <td className="px-3 py-2 text-[11px] text-[var(--tx2)] whitespace-nowrap max-w-[120px] truncate" title={deal.f_stage}>{deal.f_stage || '—'}</td>}
+      {cols.fc         && (
         <td className="px-3 py-2">
           <span className="text-[10px] font-[700] uppercase tracking-wide" style={{ color: CAT_ACCENT[deal.f_fc_cat_norm] || '#6b7280' }}>
             {getVocab()[deal.f_fc_cat_norm] ?? deal.f_fc_cat_norm ?? '—'}
           </span>
         </td>
       )}
-      {cols.nextstep && (
+      {cols.nextstep   && (
         <td className="px-3 py-2 text-[11px] text-[var(--tx2)] max-w-[200px]" title={deal.f_next_step || ''}>
           {nsStr}
           {daysSinceActivity !== null && daysSinceActivity >= 7 && (
@@ -214,7 +231,28 @@ function DealRow({ deal, cols, repResult }) {
           )}
         </td>
       )}
-      {cols.flags    && (
+      {cols.competitor && (
+        <td className="px-3 py-2 text-[11px] max-w-[100px] truncate" title={competitor || 'None identified'}>
+          {competitor
+            ? <span className="text-orange-700 dark:text-orange-300 font-[500]">{competitor.length > 20 ? competitor.substring(0, 20) + '…' : competitor}</span>
+            : <span className="text-[var(--tx2)] opacity-50">—</span>
+          }
+        </td>
+      )}
+      {cols.map        && (
+        <td className="px-3 py-2 text-center">
+          {deal.f_has_map
+            ? <span className="text-[11px] text-green-600 font-[600]">✓</span>
+            : <span className="text-[11px] text-[var(--tx2)] opacity-40">✗</span>
+          }
+        </td>
+      )}
+      {cols.daysstage  && (
+        <td className={`px-3 py-2 text-[11px] font-[500] whitespace-nowrap ${daysInStage > 30 ? 'text-red-600' : daysInStage > 14 ? 'text-amber-600' : 'text-[var(--tx2)]'}`}>
+          {daysInStage > 0 ? `${daysInStage}d` : '—'}
+        </td>
+      )}
+      {cols.flags      && (
         <td className="px-3 py-2">
           <div className="flex flex-wrap gap-1">
             {(deal._flags || []).length > 0
@@ -224,20 +262,27 @@ function DealRow({ deal, cols, repResult }) {
           </div>
         </td>
       )}
-      {cols.aiaction && (
-        <td className="px-3 py-2 text-[11px] text-[var(--tx)]">
+      {cols.aiaction   && (
+        <td className="px-3 py-2 text-[11px]" onClick={e => e.stopPropagation()}>
           {repResult?.loading
             ? <span className="flex gap-1">{[0,200,400].map(d => <span key={d} className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--blue)] animate-pulse" style={{ animationDelay: `${d}ms` }} />)}</span>
             : repResult?.error
               ? <span className="text-red-500 text-[10px]" title={repResult.error}>⚠ {repResult.error.slice(0, 40)}</span>
               : aiAction
-                ? <span className="text-purple-700 dark:text-purple-300"><span className="font-[600]">{aiAction.flag}</span>{aiAction.note ? ` — ${aiAction.note}` : ''}</span>
+                ? (
+                  <span className={`inline-flex flex-col gap-0.5`}>
+                    <span className={`inline-flex items-center gap-1 text-[10px] font-[600] px-1.5 py-0.5 rounded ${AI_RISK_BG[aiAction.risk] || AI_RISK_BG.medium} ${AI_RISK_COLORS[aiAction.risk] || AI_RISK_COLORS.medium}`}>
+                      {aiAction.framework && <span className="opacity-60">{aiAction.framework} ·</span>} {aiAction.flag}
+                    </span>
+                    {aiAction.note && <span className="text-[10px] text-[var(--tx2)]">{aiAction.note}</span>}
+                  </span>
+                )
                 : null
           }
         </td>
       )}
-      {cols.note && (
-        <td className="px-3 py-2 min-w-[140px]">
+      {cols.note       && (
+        <td className="px-3 py-2 min-w-[140px]" onClick={e => e.stopPropagation()}>
           <input
             type="text"
             value={noteVal}
@@ -251,15 +296,84 @@ function DealRow({ deal, cols, repResult }) {
   )
 }
 
+// ── Copy-for-AE text builder ──────────────────────────────────
+
+function buildAECopyText(owner, deals, repResults) {
+  const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const lines = [`📋 Pipeline Review — ${owner} — ${today}`, '']
+  const sorted = [...deals].sort((a, b) => {
+    const aMax = (a._flags || []).reduce((s, f) => Math.max(s, f.sev === 'critical' ? 2 : 1), 0)
+    const bMax = (b._flags || []).reduce((s, f) => Math.max(s, f.sev === 'critical' ? 2 : 1), 0)
+    return bMax - aMax || (b.f_amount_num || 0) - (a.f_amount_num || 0)
+  })
+
+  const flagged = sorted.filter(d => (d._flags || []).length > 0)
+  const clean   = sorted.filter(d => (d._flags || []).length === 0)
+
+  const FLAG_SUGGESTIONS = {
+    NO_NEXT_STEP:      'Add a specific next step with date and owner.',
+    CLOSE_PAST:        'Close date has passed — update to reflect current timeline.',
+    LAST_ACTIVITY_14D: 'No activity in 14+ days — re-engage immediately.',
+    NO_MAP:            'Create a Mutual Action Plan to align on path to close.',
+    STUCK_IN_STAGE:    'Deal is stalled — identify what\'s blocking stage progression.',
+    MEDDPICC_E:        'Identify and engage the Economic Buyer directly.',
+    MEDDPICC_C:        'Validate a clear Champion who can influence the decision.',
+    MEDDPICC_M:        'Quantify business metrics to justify the investment.',
+    MEDDPICC_I:        'Document the Implicated Pain driving urgency to act.',
+    LOW_LEVEL_CONTACT: 'Multi-thread to exec level — engage the Economic Buyer.',
+    STUCK_IN_STAGE:    'Diagnose the stall point and agree on a next milestone.',
+    FC_TOO_HIGH:       'Forecast category may be overstated for current stage.',
+    CLOSE_3BD:         'Close within 3 days — confirm verbal commitment and path to signature.',
+  }
+
+  flagged.forEach(d => {
+    const topFlag  = [...(d._flags || [])].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0]
+    const aiEntry  = findDealAction(repResults[d._owner]?.aiFlags, d.f_opp_name)
+    const emoji    = topFlag?.sev === 'critical' ? '🔴' : '🟡'
+    const cdStr    = d.f_close_date ? new Date(d.f_close_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '?'
+    const amtStr   = d.f_amount_num ? `$${Math.round(d.f_amount_num / 1000)}k` : ''
+    lines.push(`${emoji} ${d.f_opp_name || 'Unknown'} (${amtStr} · ${cdStr})`)
+    const note = aiEntry?.note || (topFlag && FLAG_SUGGESTIONS[topFlag.id]) || topFlag?.label || ''
+    if (note) lines.push(`   ⚡ ${note}`)
+    const action = aiEntry?.action || (topFlag && FLAG_SUGGESTIONS[topFlag.id])
+    if (action && action !== note) lines.push(`   → ${action}`)
+    lines.push('')
+  })
+
+  if (clean.length > 0) {
+    lines.push(`✅ Clean: ${clean.map(d => d.f_opp_name || 'Unknown').join(', ')}`)
+    lines.push('')
+  }
+
+  lines.push('──')
+  lines.push('Generated by Moat Pipeline Inspector')
+  return lines.join('\n')
+}
+
 // ── Rep scorecard ─────────────────────────────────────────────
 
-function RepScorecard({ owner, deals, repResult }) {
+function RepScorecard({ owner, deals, repResult, repResults }) {
+  const [copied, setCopied] = useState(false)
   const pipe      = deals.reduce((s, d) => s + (d.f_amount_num || 0), 0)
   const critCount = deals.flatMap(d => d._flags || []).filter(f => f.sev === 'critical').length
   const cleanCount = deals.filter(d => (d._flags || []).length === 0).length
   const hygiene   = deals.length > 0 ? Math.round((cleanCount / deals.length) * 100) : 100
   const cats      = { worst_case: 0, call: 0, best_case: 0, pipeline: 0 }
   deals.forEach(d => { if (cats[d.f_fc_cat_norm] !== undefined) cats[d.f_fc_cat_norm]++ })
+
+  const copyForAE = async (e) => {
+    e.stopPropagation()
+    const text = buildAECopyText(owner, deals, repResults || {})
+    try { await navigator.clipboard.writeText(text) } catch {
+      const blob = new Blob([text], { type: 'text/plain' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href = url; a.download = `moat-review-${owner.replace(/\s+/g, '-')}.txt`; a.click()
+      URL.revokeObjectURL(url)
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
     <tr className="bg-[var(--bg2)]/60 border-b border-[var(--bdr2)]">
@@ -282,10 +396,17 @@ function RepScorecard({ owner, deals, repResult }) {
             {hygiene}% hygiene
           </span>
           {repResult?.summary && (
-            <span className="text-purple-700 dark:text-purple-300 italic truncate max-w-[300px]" title={repResult.summary}>
+            <span className="text-purple-700 dark:text-purple-300 italic truncate max-w-[240px]" title={repResult.summary}>
               ✨ {repResult.summary}
             </span>
           )}
+          <button
+            onClick={copyForAE}
+            className={`ml-auto btn text-[10px] py-0.5 px-2 flex items-center gap-1 ${copied ? 'border-green-500 text-green-700' : ''}`}
+            title="Copy pipeline review for this AE"
+          >
+            {copied ? '✓ Copied' : '📋 Copy for AE'}
+          </button>
         </div>
       </td>
     </tr>
@@ -336,14 +457,15 @@ function GroupHeader({ group, colCount, collapsed, onToggle, showAE, onCopy }) {
 
 // ── Table ─────────────────────────────────────────────────────
 
-function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy }) {
+function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy, onOpenDeal }) {
   const visibleCols = Object.entries(cols).filter(([, v]) => v).map(([k]) => k)
   const colCount    = visibleCols.length
 
   const COL_HEADERS = {
     ae: 'AE', deal: 'Deal', amount: 'Amount', close: 'Close',
     stage: 'Stage', fc: 'FC', nextstep: 'Next Step',
-    flags: 'Rules Based Flags', aiaction: 'AI Flags', note: 'Manager Note',
+    competitor: 'Competitor', map: 'MAP', daysstage: 'Days/Stage',
+    flags: 'Rules Flags', aiaction: 'AI Insights', note: 'Manager Note',
   }
 
   const copyGroup = async (group) => {
@@ -393,6 +515,7 @@ function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy
                     owner={group.key}
                     deals={group.deals}
                     repResult={repResults[group.key]}
+                    repResults={repResults}
                   />
                 )}
                 {!collapsed[group.key] && (
@@ -414,6 +537,7 @@ function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy
                               deal={deal}
                               cols={cols}
                               repResult={repResults[deal._owner]}
+                              onOpen={onOpenDeal}
                             />
                           ))}
                         </React.Fragment>
@@ -424,6 +548,7 @@ function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy
                           deal={deal}
                           cols={cols}
                           repResult={repResults[deal._owner]}
+                          onOpen={onOpenDeal}
                         />
                       ))
                 )}
@@ -439,20 +564,23 @@ function InspectorTable({ groups, cols, repResults, collapsed, onToggle, groupBy
 // ── Stats bar ─────────────────────────────────────────────────
 
 function StatsBar({ stats, isRunning, runningOwner, repsDone, repsTotal }) {
+  const items = [
+    { label: 'AEs',             val: stats.aes,          color: '' },
+    { label: 'Active deals',    val: stats.deals,        color: '' },
+    { label: 'Total pipeline',  val: fmt(stats.pipe),    color: '' },
+    { label: 'Critical flags',  val: stats.crit,         color: 'text-red-600' },
+    { label: 'Warnings',        val: stats.warn,         color: 'text-amber-600' },
+    { label: 'AEs w/ critical', val: stats.aesWithCrit,  color: 'text-red-600' },
+    ...(stats.withMap    !== undefined ? [{ label: 'With MAP',    val: stats.withMap,    color: 'text-green-600' }] : []),
+    ...(stats.competitive !== undefined ? [{ label: 'Competitive', val: stats.competitive, color: 'text-orange-600' }] : []),
+  ]
   return (
     <div className="card overflow-hidden mb-3">
-      <div className="grid grid-cols-6 divide-x divide-[var(--bdr2)]">
-        {[
-          { label: 'AEs',             val: stats.aes,             color: '' },
-          { label: 'Active deals',    val: stats.deals,           color: '' },
-          { label: 'Total pipeline',  val: fmt(stats.pipe),       color: '' },
-          { label: 'Critical flags',  val: stats.crit,            color: 'text-red-600' },
-          { label: 'Warnings',        val: stats.warn,            color: 'text-amber-600' },
-          { label: 'AEs w/ critical', val: stats.aesWithCrit,     color: 'text-red-600' },
-        ].map((s, i) => (
+      <div className={`grid grid-cols-${items.length} divide-x divide-[var(--bdr2)]`} style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+        {items.map((s, i) => (
           <div key={i} className="flex flex-col items-center justify-center py-3">
             <div className={`text-[18px] font-[700] ${s.color}`}>{s.val}</div>
-            <div className="text-[9px] uppercase tracking-wider text-[var(--tx2)] mt-0.5">{s.label}</div>
+            <div className="text-[9px] uppercase tracking-wider text-[var(--tx2)] mt-0.5 text-center">{s.label}</div>
           </div>
         ))}
       </div>
@@ -578,16 +706,19 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
 // ── Column picker ─────────────────────────────────────────────
 
 const ALL_COLS = [
-  { id: 'ae',       label: 'AE'        },
-  { id: 'deal',     label: 'Deal'      },
-  { id: 'amount',   label: 'Amount'    },
-  { id: 'close',    label: 'Close'     },
-  { id: 'stage',    label: 'Stage'     },
-  { id: 'fc',       label: 'FC'        },
-  { id: 'nextstep', label: 'Next Step' },
-  { id: 'flags',    label: 'Flags'     },
-  { id: 'aiaction', label: 'AI Action' },
-  { id: 'note',     label: 'Note'      },
+  { id: 'ae',         label: 'AE'          },
+  { id: 'deal',       label: 'Deal'        },
+  { id: 'amount',     label: 'Amount'      },
+  { id: 'close',      label: 'Close'       },
+  { id: 'stage',      label: 'Stage'       },
+  { id: 'fc',         label: 'FC'          },
+  { id: 'nextstep',   label: 'Next Step'   },
+  { id: 'competitor', label: 'Competitor'  },
+  { id: 'map',        label: 'MAP'         },
+  { id: 'daysstage',  label: 'Days/Stage'  },
+  { id: 'flags',      label: 'Rule Flags'  },
+  { id: 'aiaction',   label: 'AI Insights' },
+  { id: 'note',       label: 'Note'        },
 ]
 
 function ColPicker({ visible, onChange }) {
@@ -613,6 +744,444 @@ function ColPicker({ visible, onChange }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ── Deal Drawer ───────────────────────────────────────────────
+
+const RATING_STYLE = {
+  strong:  { bg: 'bg-green-50 dark:bg-green-950/30',  text: 'text-green-700 dark:text-green-300',  label: 'Strong'  },
+  weak:    { bg: 'bg-amber-50 dark:bg-amber-950/30',  text: 'text-amber-700 dark:text-amber-300',  label: 'Weak'    },
+  missing: { bg: 'bg-red-50 dark:bg-red-950/30',      text: 'text-red-700 dark:text-red-300',      label: 'Missing' },
+}
+const WHY_STYLE = {
+  filled: { bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-300' },
+  gap:    { bg: 'bg-red-100 dark:bg-red-900/40',     text: 'text-red-700 dark:text-red-300'     },
+}
+const THREAT_STYLE = {
+  high:   { bg: 'bg-red-50 dark:bg-red-950/30',      text: 'text-red-700 dark:text-red-300'    },
+  medium: { bg: 'bg-amber-50 dark:bg-amber-950/30',  text: 'text-amber-700 dark:text-amber-300'},
+  low:    { bg: 'bg-green-50 dark:bg-green-950/30',  text: 'text-green-700 dark:text-green-300'},
+  none:   { bg: 'bg-[var(--bg2)]',                   text: 'text-[var(--tx2)]'                 },
+}
+
+function DealDrawer({ deal, repResult, apiKey, onClose }) {
+  const insp = useInspectorStore()
+  const [activeTab, setActiveTab] = useState('overview')
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+
+  const dealKey    = (deal.f_opp_name || '').toLowerCase()
+  const inspection = insp.dealInspections[dealKey]
+  const abortRef   = useRef(null)
+
+  const cd       = deal.f_close_date ? new Date(deal.f_close_date) : null
+  const daysLeft  = cd ? Math.round((cd - now) / 86400000) : null
+  const cdStr     = cd ? cd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+  const la        = deal.f_last_activity ? new Date(deal.f_last_activity) : null
+  const daysSince = la ? Math.round((now - la) / 86400000) : null
+
+  const runInspection = async () => {
+    if (!apiKey) return
+    abortRef.current?.abort()
+    const ac = new AbortController()
+    abortRef.current = ac
+    insp.setDealInspectionLoading(dealKey)
+    try {
+      const result = await fetchDealInspection({ deal, apiKey, signal: ac.signal })
+      insp.setDealInspectionResult(dealKey, result)
+      insp.logUsage(result.inputTokens, result.outputTokens, 0, 1)
+    } catch (err) {
+      if (err.name !== 'AbortError') insp.setDealInspectionError(dealKey, err.message)
+    }
+  }
+
+  // Build at-a-glance pills: rule flags + AI risk first
+  const ruleFlags = [...(deal._flags || [])]
+    .sort((a, b) => (b.weight || 0) - (a.weight || 0))
+    .slice(0, 4)
+
+  const aiAction = findDealAction(repResult?.aiFlags, deal.f_opp_name)
+
+  const pills = []
+  if (aiAction) {
+    const riskLabel = aiAction.risk === 'critical' ? '🔴' : aiAction.risk === 'high' ? '🟡' : '🟠'
+    pills.push({ key: 'ai', emoji: riskLabel, text: aiAction.flag?.replace(/_/g, ' '), sev: aiAction.risk, isAI: true })
+  }
+  ruleFlags.forEach(f => {
+    if (pills.length < 4) {
+      const emoji = f.sev === 'critical' ? '🔴' : '🟡'
+      pills.push({ key: f.id, emoji, text: f.label, sev: f.sev })
+    }
+  })
+  const extraCount = Math.max(0, (deal._flags || []).length - pills.filter(p => !p.isAI).length)
+
+  const primaryAction = inspection?.result?.action
+
+  // Copy single deal summary
+  const [copied, setCopied] = useState(false)
+  const copySingle = async () => {
+    const text = buildAECopyText(deal._owner || 'AE', [deal], repResult ? { [deal._owner]: repResult } : {})
+    try { await navigator.clipboard.writeText(text) } catch {}
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+
+  const MEDDPICC_ROWS = [
+    { letter: 'M', label: 'Metrics',            key: 'f_metrics'      },
+    { letter: 'E', label: 'Economic Buyer',      key: 'f_econ_buyer'   },
+    { letter: 'DC', label: 'Decision Criteria',  key: 'f_dec_criteria' },
+    { letter: 'DP', label: 'Decision Process',   key: 'f_dec_process'  },
+    { letter: 'PP', label: 'Procurement',        key: 'f_proc_process' },
+    { letter: 'I',  label: 'Implicated Pain',    key: 'f_implicated'   },
+    { letter: 'C',  label: 'Champion',           key: 'f_champion'     },
+  ]
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      {/* Backdrop */}
+      <div className="flex-1 bg-black/30" onClick={onClose} />
+      {/* Panel */}
+      <div className="w-[560px] max-w-[95vw] bg-[var(--bg)] border-l border-[var(--bdr2)] flex flex-col h-full overflow-hidden shadow-2xl">
+
+        {/* ── Header ── */}
+        <div className="px-5 pt-4 pb-3 border-b border-[var(--bdr2)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <h2 className="text-[14px] font-[700] text-[var(--tx)] leading-tight truncate" title={deal.f_opp_name}>
+                {deal.f_opp_name || 'Unknown Deal'}
+              </h2>
+              <div className="flex items-center gap-2 mt-1 flex-wrap">
+                <span className="text-[10px] font-[700] uppercase tracking-wide px-1.5 py-0.5 rounded" style={{ color: CAT_ACCENT[deal.f_fc_cat_norm] || '#6b7280', background: CAT_ACCENT[deal.f_fc_cat_norm] + '18' || '#6b728018' }}>
+                  {getVocab()[deal.f_fc_cat_norm] ?? deal.f_fc_cat_norm ?? '?'}
+                </span>
+                <span className="text-[12px] font-[600] text-[var(--tx)]">{fmt(deal.f_amount_num)}</span>
+                <span className={`text-[11px] font-[500] ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : daysLeft !== null && daysLeft <= 14 ? 'text-amber-600' : 'text-[var(--tx2)]'}`}>
+                  Close {cdStr}{daysLeft !== null ? ` (${daysLeft >= 0 ? daysLeft + 'd' : Math.abs(daysLeft) + 'd past'})` : ''}
+                </span>
+                {deal.f_days_in_stage > 30 && (
+                  <span className="text-[10px] font-[600] text-red-600 bg-red-50 dark:bg-red-950/30 px-1.5 py-0.5 rounded">
+                    {deal.f_days_in_stage}d in stage
+                  </span>
+                )}
+                {deal.f_stage && <span className="text-[11px] text-[var(--tx2)]">{deal.f_stage}</span>}
+              </div>
+              <div className="text-[11px] text-[var(--tx2)] mt-0.5">{deal._owner}</div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={copySingle} className={`btn text-[10px] py-0.5 px-2 ${copied ? 'border-green-500 text-green-700' : ''}`} title="Copy review for this deal">
+                {copied ? '✓' : '📋'}
+              </button>
+              <button onClick={onClose} className="btn text-[12px] w-7 h-7 flex items-center justify-center p-0">✕</button>
+            </div>
+          </div>
+
+          {/* ── At-a-glance risk strip ── */}
+          <div className="mt-3">
+            <div className="flex flex-wrap gap-1.5 items-center">
+              {pills.map(p => (
+                <span key={p.key} className={`inline-flex items-center gap-1 text-[10px] font-[600] px-2 py-0.5 rounded-full border ${
+                  p.sev === 'critical' ? 'bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-300'
+                  : p.sev === 'high'   ? 'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300'
+                  :                      'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-300'
+                }`}>
+                  {p.emoji} {p.text}
+                  {p.isAI && <span className="opacity-50 text-[8px]">AI</span>}
+                </span>
+              ))}
+              {extraCount > 0 && (
+                <span className="text-[10px] text-[var(--tx2)] font-[500]">+{extraCount} more</span>
+              )}
+              {pills.length === 0 && (
+                <span className="text-[11px] text-green-600 font-[500]">✓ No flags</span>
+              )}
+            </div>
+            {primaryAction && (
+              <div className="mt-2 text-[11px] text-[var(--tx)] font-[600] italic border-l-2 border-purple-400 pl-2">
+                {primaryAction}
+              </div>
+            )}
+            {!primaryAction && apiKey && !inspection?.loading && (
+              <button onClick={() => { setActiveTab('ai'); runInspection() }} className="mt-1.5 text-[10px] text-purple-600 dark:text-purple-400 hover:underline">
+                ✨ Run AI for deeper analysis
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── Tabs ── */}
+        <div className="flex border-b border-[var(--bdr2)] px-5 bg-[var(--bg)]">
+          {[{ id: 'overview', label: 'Overview' }, { id: 'meddpicc', label: 'MEDDPICC' }, { id: 'ai', label: 'AI Analysis' }].map(t => (
+            <button
+              key={t.id}
+              onClick={() => setActiveTab(t.id)}
+              className={`px-3 py-2 text-[11px] font-[600] border-none bg-transparent cursor-pointer -mb-px transition-colors ${
+                activeTab === t.id
+                  ? 'text-[var(--blue)] border-b-2 border-[var(--blue)]'
+                  : 'text-[var(--tx2)] hover:text-[var(--tx)]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Tab content ── */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 text-[12px]">
+
+          {/* Overview tab */}
+          {activeTab === 'overview' && (
+            <div className="flex flex-col gap-4">
+              {/* Next Step */}
+              <div>
+                <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1.5">Next Step</div>
+                <div className="bg-[var(--bg2)] rounded-lg p-3 text-[12px] text-[var(--tx)] leading-relaxed whitespace-pre-wrap">
+                  {deal.f_next_step?.trim() || <span className="text-red-500 font-[500]">Empty — no next step recorded.</span>}
+                </div>
+                {daysSince !== null && (
+                  <div className={`text-[10px] mt-1 font-[500] ${daysSince >= 14 ? 'text-red-500' : daysSince >= 7 ? 'text-amber-500' : 'text-[var(--tx2)]'}`}>
+                    Last activity: {daysSince}d ago {daysSince >= 14 ? '⚠' : ''}
+                  </div>
+                )}
+              </div>
+
+              {/* Key signals row */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* Competitor */}
+                <div className="bg-[var(--bg2)] rounded-lg p-3">
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1">Competitor</div>
+                  {deal.f_competitor?.trim()
+                    ? <span className="text-orange-700 dark:text-orange-300 font-[600]">{deal.f_competitor}</span>
+                    : <span className="text-[var(--tx2)] italic">Not identified</span>
+                  }
+                </div>
+                {/* MAP */}
+                <div className="bg-[var(--bg2)] rounded-lg p-3">
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1">Mutual Action Plan</div>
+                  {deal.f_has_map
+                    ? <a href={deal.f_map} target="_blank" rel="noopener noreferrer" className="text-green-600 font-[600] hover:underline" onClick={e => e.stopPropagation()}>✓ MAP exists ↗</a>
+                    : <span className="text-red-500 font-[500]">✗ No MAP</span>
+                  }
+                </div>
+                {/* Win Room */}
+                <div className="bg-[var(--bg2)] rounded-lg p-3">
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1">Win Room</div>
+                  {deal.f_has_win_room
+                    ? <a href={deal.f_win_room} target="_blank" rel="noopener noreferrer" className="text-green-600 font-[600] hover:underline" onClick={e => e.stopPropagation()}>✓ Open ↗</a>
+                    : <span className="text-[var(--tx2)] italic">Not opened</span>
+                  }
+                </div>
+                {/* Contact */}
+                <div className="bg-[var(--bg2)] rounded-lg p-3">
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1">Primary Contact</div>
+                  <div className="font-[600] text-[var(--tx)] truncate">{deal.f_primary_contact || deal.f_champion || '—'}</div>
+                  {deal.f_contact_title && <div className="text-[10px] text-[var(--tx2)] mt-0.5">{deal.f_contact_title}</div>}
+                </div>
+              </div>
+
+              {/* Manager Notes */}
+              {deal.f_manager_notes?.trim() && (
+                <div>
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1.5">Manager Notes</div>
+                  <div className="bg-[var(--bg2)] rounded-lg p-3 text-[11px] text-[var(--tx)] leading-relaxed whitespace-pre-wrap max-h-[180px] overflow-y-auto">
+                    {deal.f_manager_notes.trim()}
+                  </div>
+                </div>
+              )}
+
+              {/* SDR Notes */}
+              {deal.f_sdr_notes?.trim() && (
+                <div>
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1.5">SDR Notes</div>
+                  <div className="bg-[var(--bg2)] rounded-lg p-3 text-[11px] text-[var(--tx)] leading-relaxed whitespace-pre-wrap max-h-[140px] overflow-y-auto">
+                    {deal.f_sdr_notes.trim()}
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata row */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-[var(--tx2)] border-t border-[var(--bdr2)] pt-3">
+                {deal.f_lead_type    && <span>Lead: <b>{deal.f_lead_type}</b></span>}
+                {deal.f_revenue_motion && <span>Motion: <b>{deal.f_revenue_motion}</b></span>}
+                {deal.f_product_interest && <span>Product: <b>{deal.f_product_interest}</b></span>}
+                {deal.f_days_in_stage > 0 && <span>Days in stage: <b className={deal.f_days_in_stage > 30 ? 'text-red-600' : ''}>{deal.f_days_in_stage}</b></span>}
+                {deal.f_age > 0 && <span>Deal age: <b>{deal.f_age}d</b></span>}
+                {deal.f_ref_partner && <span>Partner: <b>{deal.f_ref_partner}</b></span>}
+              </div>
+            </div>
+          )}
+
+          {/* MEDDPICC tab */}
+          {activeTab === 'meddpicc' && (
+            <div className="flex flex-col gap-4">
+              <div className="overflow-hidden rounded-lg border border-[var(--bdr2)]">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-[var(--bg2)] text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">
+                      <th className="px-3 py-2 text-left w-8">·</th>
+                      <th className="px-3 py-2 text-left w-32">Field</th>
+                      <th className="px-3 py-2 text-left">Content</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MEDDPICC_ROWS.map(({ letter, label, key }) => {
+                      const val = (deal[key] || '').trim()
+                      return (
+                        <tr key={key} className="border-t border-[var(--bdr2)]">
+                          <td className="px-3 py-2 text-center">
+                            <span className={`inline-block w-4 h-4 rounded-full text-[8px] font-[700] flex items-center justify-center ${val ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                              {val ? '✓' : '✗'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-[11px] font-[600] text-[var(--tx)] whitespace-nowrap">
+                            <span className="text-[9px] font-[700] text-[var(--tx2)] mr-1">{letter}</span>{label}
+                          </td>
+                          <td className="px-3 py-2 text-[11px] text-[var(--tx)] leading-relaxed">
+                            {val
+                              ? <span className="line-clamp-3" title={val}>{val.length > 200 ? val.substring(0, 200) + '…' : val}</span>
+                              : <span className="text-[var(--tx2)] italic">Empty</span>
+                            }
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {deal.f_meddpicc_notes?.trim() && (
+                <div>
+                  <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-1.5">MEDDPICC Rep Notes</div>
+                  <div className="bg-[var(--bg2)] rounded-lg p-3 text-[11px] text-[var(--tx)] leading-relaxed whitespace-pre-wrap max-h-[220px] overflow-y-auto">
+                    {deal.f_meddpicc_notes.trim()}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI Analysis tab */}
+          {activeTab === 'ai' && (
+            <div className="flex flex-col gap-3">
+              {/* Run button */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={runInspection}
+                  disabled={!apiKey || inspection?.loading}
+                  className="btn btn-primary text-[11px] flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {inspection?.loading
+                    ? <><span className="inline-block w-2 h-2 rounded-full bg-white/60 animate-pulse" /> Analysing…</>
+                    : inspection?.result ? '↺ Re-run Analysis' : '✨ Run Deep Inspection'
+                  }
+                </button>
+                {!apiKey && <span className="text-[11px] text-[var(--tx2)]">Add API key in Settings to enable.</span>}
+              </div>
+
+              {inspection?.error && (
+                <div className="text-[11px] text-red-600 bg-red-50 dark:bg-red-950/30 px-3 py-2 rounded-lg">
+                  ⚠ {inspection.error}
+                </div>
+              )}
+
+              {inspection?.loading && (
+                <div className="flex flex-col gap-2">
+                  {[1,2,3,4,5].map(i => (
+                    <div key={i} className="h-16 rounded-lg bg-[var(--bg2)] animate-pulse" />
+                  ))}
+                </div>
+              )}
+
+              {inspection?.result && (() => {
+                const r = inspection.result
+                return (
+                  <div className="flex flex-col gap-3">
+                    {/* Next Step */}
+                    {r.nextStep && (() => {
+                      const s = RATING_STYLE[r.nextStep.rating] || RATING_STYLE.weak
+                      return (
+                        <div className={`rounded-lg p-3 ${s.bg}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">Next Step</span>
+                            <span className={`text-[10px] font-[700] px-1.5 py-0.5 rounded ${s.bg} ${s.text}`}>{s.label}</span>
+                          </div>
+                          <p className={`text-[12px] ${s.text}`}>{r.nextStep.note}</p>
+                        </div>
+                      )
+                    })()}
+
+                    {/* 3 Whys */}
+                    {r.threeWhys && (
+                      <div className="bg-[var(--bg2)] rounded-lg p-3">
+                        <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-2">3 Whys (Command of Message)</div>
+                        <div className="grid grid-cols-3 gap-2 mb-2">
+                          {[
+                            { label: 'Why Change', val: r.threeWhys.whyChange },
+                            { label: 'Why Now',    val: r.threeWhys.whyNow    },
+                            { label: 'Why Remote', val: r.threeWhys.whyRemote },
+                          ].map(({ label, val }) => {
+                            const s = WHY_STYLE[val] || WHY_STYLE.gap
+                            return (
+                              <div key={label} className={`rounded p-2 text-center ${s.bg}`}>
+                                <div className="text-[9px] font-[600] text-[var(--tx2)] mb-0.5">{label}</div>
+                                <div className={`text-[11px] font-[700] capitalize ${s.text}`}>{val}</div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <p className="text-[11px] text-[var(--tx2)] italic">{r.threeWhys.note}</p>
+                      </div>
+                    )}
+
+                    {/* MEDDPICC score */}
+                    {r.meddpicc && (
+                      <div className="bg-[var(--bg2)] rounded-lg p-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">MEDDPICC</span>
+                          <span className="text-[13px] font-[700] text-[var(--tx)]">{r.meddpicc.score}</span>
+                          {r.meddpicc.gaps && r.meddpicc.gaps !== 'none' && (
+                            <span className="text-[10px] text-red-600 font-[500]">Gaps: {r.meddpicc.gaps}</span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[var(--tx2)]">{r.meddpicc.note}</p>
+                      </div>
+                    )}
+
+                    {/* Competitive */}
+                    {r.competitive && (() => {
+                      const s = THREAT_STYLE[r.competitive.threat] || THREAT_STYLE.none
+                      return (
+                        <div className={`rounded-lg p-3 ${s.bg}`}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)]">Competitive</span>
+                            <span className={`text-[10px] font-[700] capitalize ${s.text}`}>{r.competitive.threat} threat</span>
+                            {r.competitive.competitor && r.competitive.competitor !== 'none' && (
+                              <span className="text-[10px] text-orange-700 dark:text-orange-300 font-[500]">{r.competitive.competitor}</span>
+                            )}
+                          </div>
+                          <p className={`text-[11px] ${s.text}`}>{r.competitive.note}</p>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Primary Action */}
+                    {r.action && (
+                      <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                        <div className="text-[10px] font-[700] uppercase tracking-wider text-purple-600 dark:text-purple-400 mb-1">Primary Action</div>
+                        <p className="text-[13px] font-[600] text-purple-900 dark:text-purple-200 leading-snug">{r.action}</p>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {!inspection && !inspection?.loading && (
+                <p className="text-[12px] text-[var(--tx2)]">Click Run to get a structured analysis using MEDDPICC, 3 Whys, and competitive positioning.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -643,8 +1212,16 @@ export default function Inspector() {
   const [focusOpen,   setFocusOpen]   = useState(false)
   const [colsVisible, setColsVisible] = useState({
     ae: true, deal: true, amount: true, close: true,
-    stage: true, fc: true, nextstep: true, flags: true, aiaction: false, note: false,
+    stage: true, fc: true, nextstep: true,
+    competitor: true, map: true, daysstage: false,
+    flags: true, aiaction: false, note: false,
   })
+  const [filterCompetitors, setFilterCompetitors] = useState([])
+  const [filterNoMap,  setFilterNoMap]  = useState(false)
+  const [filterStuck,  setFilterStuck]  = useState(false)
+  const inspectedDeal = useInspectorStore(s => s.inspectedDeal)
+  const openDealDrawer  = useInspectorStore(s => s.openDealDrawer)
+  const closeDealDrawer = useInspectorStore(s => s.closeDealDrawer)
   const abortRef = useRef(null)
   const slackRef = useRef(null)
   const [runError,      setRunError]      = React.useState(null)
@@ -689,6 +1266,7 @@ export default function Inspector() {
       const aesWithCrit = sorted.filter(([, deals]) =>
         deals.flatMap(d => d._flags || []).some(f => f.sev === 'critical')
       ).length
+      const commitTierR = lr.active.filter(d => ['worst_case', 'call'].includes(d.f_fc_cat_norm))
       setStats({
         aes: sorted.length,
         deals: lr.active.length,
@@ -696,6 +1274,8 @@ export default function Inspector() {
         crit: allFlags.filter(f => f.sev === 'critical').length,
         warn: allFlags.filter(f => f.sev === 'warn').length,
         aesWithCrit,
+        withMap: commitTierR.filter(d => d.f_has_map).length,
+        competitive: lr.active.filter(d => (d.f_competitor || '').trim()).length,
       })
       setLastRunDate(new Date(ts))
     } catch {}
@@ -720,18 +1300,26 @@ export default function Inspector() {
   }), [colsVisible, aiActive, insp.groupBy])
 
   // Filter options
-  const allAEs  = useMemo(() => [...new Set(allDeals.map(d => d._owner))].sort(), [allDeals])
-  const allCats = CAT_ORDER
+  const allAEs   = useMemo(() => [...new Set(allDeals.map(d => d._owner))].sort(), [allDeals])
+  const allCats  = CAT_ORDER
+  const allComps = useMemo(() => {
+    const seen = new Set()
+    allDeals.forEach(d => { if (d.f_competitor?.trim()) seen.add(d.f_competitor.trim()) })
+    return [...seen].sort()
+  }, [allDeals])
 
   // Filtered + grouped + sorted deals
   const visibleDeals = useMemo(() => {
     let d = allDeals
-    if (filterAEs.length)   d = d.filter(x => filterAEs.includes(x._owner))
-    if (filterCats.length)  d = d.filter(x => filterCats.includes(x.f_fc_cat_norm))
-    if (filterFlags.length) d = d.filter(x => (x._flags || []).some(f => filterFlags.includes(f.id)))
-    if (insp.flaggedOnly)   d = d.filter(x => (x._flags || []).length > 0)
+    if (filterAEs.length)          d = d.filter(x => filterAEs.includes(x._owner))
+    if (filterCats.length)         d = d.filter(x => filterCats.includes(x.f_fc_cat_norm))
+    if (filterFlags.length)        d = d.filter(x => (x._flags || []).some(f => filterFlags.includes(f.id)))
+    if (filterCompetitors.length)  d = d.filter(x => filterCompetitors.includes((x.f_competitor || '').trim()))
+    if (filterNoMap)               d = d.filter(x => !x.f_has_map)
+    if (filterStuck)               d = d.filter(x => x.f_days_in_stage > 30)
+    if (insp.flaggedOnly)          d = d.filter(x => (x._flags || []).length > 0)
     return d
-  }, [allDeals, filterAEs, filterCats, filterFlags, insp.flaggedOnly])
+  }, [allDeals, filterAEs, filterCats, filterFlags, filterCompetitors, filterNoMap, filterStuck, insp.flaggedOnly])
 
   const groups = useMemo(() => {
     const raw = buildGroups(visibleDeals, insp.groupBy)
@@ -792,6 +1380,10 @@ export default function Inspector() {
         deals.flatMap(d => d._flags).some(f => f.sev === 'critical')
       ).length
 
+      const commitTier = active.filter(d => ['worst_case', 'call'].includes(d.f_fc_cat_norm))
+      const withMap    = commitTier.filter(d => d.f_has_map).length
+      const competitive = active.filter(d => (d.f_competitor || '').trim()).length
+
       setAllDeals(active)
       setRepsSorted(sorted)
       setFilterAEs([]); setFilterCats([]); setFilterFlags([])
@@ -799,6 +1391,7 @@ export default function Inspector() {
         aes: sorted.length, deals: active.length,
         pipe: active.reduce((s, d) => s + d.f_amount_num, 0),
         crit: critCount, warn: warnCount, aesWithCrit,
+        withMap, competitive,
       })
 
       // Use getState() for actions — they are stable references regardless
@@ -1023,9 +1616,31 @@ export default function Inspector() {
           onChange={setFilterFlags}
         />
 
+        {allComps.length > 0 && (
+          <MultiSelect
+            label="Competitor"
+            options={allComps.map(c => ({ value: c, label: c }))}
+            value={filterCompetitors}
+            onChange={setFilterCompetitors}
+          />
+        )}
+        <button
+          onClick={() => setFilterNoMap(v => !v)}
+          className={`btn text-[11px] ${filterNoMap ? 'bg-orange-500 text-white border-orange-500' : ''}`}
+          title="Show only deals without a MAP"
+        >
+          {filterNoMap ? 'No MAP ✓' : 'No MAP'}
+        </button>
+        <button
+          onClick={() => setFilterStuck(v => !v)}
+          className={`btn text-[11px] ${filterStuck ? 'bg-amber-500 text-white border-amber-500' : ''}`}
+          title="Show only deals stuck >30d in stage"
+        >
+          {filterStuck ? 'Stuck ✓' : 'Stuck'}
+        </button>
         {/* Flagged only toggle */}
         <button
-          onClick={() => insp.setFlaggedOnly(!insp.flaggedOnly)}  // Add setFlaggedOnly to store
+          onClick={() => insp.setFlaggedOnly(!insp.flaggedOnly)}
           className={`btn text-[11px] ${insp.flaggedOnly ? 'bg-amber-500 text-white border-amber-500' : ''}`}
         >
           {insp.flaggedOnly ? 'Flagged only ✓' : 'Flagged only'}
@@ -1104,6 +1719,17 @@ export default function Inspector() {
           collapsed={collapsed}
           onToggle={key => setCollapsed(p => ({ ...p, [key]: !p[key] }))}
           groupBy={insp.groupBy}
+          onOpenDeal={openDealDrawer}
+        />
+      )}
+
+      {/* Deal drawer */}
+      {inspectedDeal && (
+        <DealDrawer
+          deal={inspectedDeal}
+          repResult={insp.repResults[inspectedDeal._owner]}
+          apiKey={apiKey}
+          onClose={closeDealDrawer}
         />
       )}
 

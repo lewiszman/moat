@@ -324,6 +324,8 @@ export const useInspectorStore = create(
       activeTab: 'reps',
       usageLog: [],
       pendingAEFilter: null,
+      inspectedDeal: null,
+      dealInspections: {},
       setPendingAEFilter: (owner) => set(s => { s.pendingAEFilter = owner }),
       clearPendingAEFilter: () => set(s => { s.pendingAEFilter = null }),
 
@@ -375,6 +377,18 @@ export const useInspectorStore = create(
         ]
       }),
       clearUsageLog: () => set(s => { s.usageLog = [] }),
+
+      openDealDrawer:  (deal) => set(s => { s.inspectedDeal = deal }),
+      closeDealDrawer: ()     => set(s => { s.inspectedDeal = null }),
+      setDealInspectionLoading: (key) => set(s => {
+        s.dealInspections[key] = { loading: true, result: null, error: null }
+      }),
+      setDealInspectionResult: (key, result) => set(s => {
+        s.dealInspections[key] = { loading: false, result, error: null }
+      }),
+      setDealInspectionError: (key, error) => set(s => {
+        s.dealInspections[key] = { loading: false, result: null, error }
+      }),
     })),
     {
       name: 'moat-inspector-v3',

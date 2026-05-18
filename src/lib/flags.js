@@ -82,6 +82,10 @@ export const FLAG_DEFS = {
   MEDDPICC_DP:       { id: 'MEDDPICC_DP',        label: 'Decision Process empty',        sev: 'warn',     weight:  30 },
   MEDDPICC_PP:       { id: 'MEDDPICC_PP',        label: 'Procurement Process empty',     sev: 'warn',     weight:  25 },
   NO_ACTIVITY_DATA:  { id: 'NO_ACTIVITY_DATA',   label: 'No activity date available',    sev: 'warn',     weight:  20 },
+  NO_MAP:            { id: 'NO_MAP',             label: 'No MAP',                        sev: 'warn',     weight:  38 },
+  STUCK_IN_STAGE:    { id: 'STUCK_IN_STAGE',     label: 'Stuck >30d in stage',           sev: 'warn',     weight:  36 },
+  LOW_LEVEL_CONTACT: { id: 'LOW_LEVEL_CONTACT',  label: 'Contact not exec-level',        sev: 'warn',     weight:  28 },
+  NO_COMPETITOR:     { id: 'NO_COMPETITOR',      label: 'Competitor not identified',     sev: 'warn',     weight:  22 },
 }
 
 // Flat list for filter UI
@@ -157,6 +161,33 @@ export function flagDeal(deal) {
 
   // 6. Amount zero
   if (amt === 0) flags.push(FLAG_DEFS.AMOUNT_ZERO)
+
+  // 7. No MAP on commit-tier deals (not early stage)
+  if (['worst_case', 'call'].includes(cat) && !isEarlyStage && !deal.f_has_map) {
+    flags.push(FLAG_DEFS.NO_MAP)
+  }
+
+  // 8. Stuck in stage >30 days on best_case+
+  if (['worst_case', 'call', 'best_case'].includes(cat) && deal.f_days_in_stage > 30) {
+    flags.push(FLAG_DEFS.STUCK_IN_STAGE)
+  }
+
+  // 9. Contact not exec-level — IC title with a different Economic Buyer signals no exec access
+  if (deal.f_contact_title && deal.f_econ_buyer) {
+    const titleLower = deal.f_contact_title.toLowerCase()
+    const IC_KEYWORDS = ['specialist', 'coordinator', 'assistant', 'analyst', 'associate', 'administrator']
+    const isIC = IC_KEYWORDS.some(k => titleLower.includes(k))
+    if (isIC) flags.push(FLAG_DEFS.LOW_LEVEL_CONTACT)
+  }
+
+  // 10. Competitor not identified on late-stage deals
+  if (['worst_case', 'call', 'best_case'].includes(cat) && !isEarlyStage) {
+    const stageKey = Object.keys(STAGE_MAX_FC).find(k => stage.includes(k))
+    const isProposalPlus = stageKey && ['proposal', 'negotiation', 'legal & commercial', 'contract review', 'verbal commit'].includes(stageKey)
+    if (isProposalPlus && !(deal.f_competitor || '').trim()) {
+      flags.push(FLAG_DEFS.NO_COMPETITOR)
+    }
+  }
 
   return flags
 }
