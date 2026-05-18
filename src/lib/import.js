@@ -95,13 +95,28 @@ const DEFAULT_COL_MAP = {
   'Forecast Category':        'f_fc_cat',
   'Next Step':                'f_next_step',
   'Account: Last Activity':   'f_last_activity',
+  'Last Activity':            'f_last_activity',
   'Metrics':                  'f_metrics',
   'Economic Buyer':           'f_econ_buyer',
   'Decision Criteria':        'f_dec_criteria',
   'Decision Process':         'f_dec_process',
   'Procurement Process':      'f_proc_process',
+  'Procurement':              'f_proc_process',
   'Implicated Pain':          'f_implicated',
   'Champion':                 'f_champion',
+  // Enriched fields
+  'AE Notes':                 'f_ae_notes',
+  'AE Note':                  'f_ae_notes',
+  'Manager Notes':            'f_manager_notes',
+  'Manager Note':             'f_manager_notes',
+  'SDR Notes':                'f_sdr_notes',
+  'SDR Note':                 'f_sdr_notes',
+  'Competitor':               'f_competitor',
+  'Competition':              'f_competitor',
+  'Why Change':               'f_why_change',
+  'Why Now':                  'f_why_now',
+  'Why Remote':               'f_why_remote',
+  'Why Us':                   'f_why_remote',
 }
 
 // normalizeFcCat — resolves a raw CSV forecast category value to an internal key.

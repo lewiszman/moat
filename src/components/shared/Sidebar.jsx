@@ -46,17 +46,6 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
-  {
-    id: 'repview',
-    label: 'Rep View',
-    badge: 'Beta',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="7.5" cy="5" r="2.5"/>
-        <path d="M2 13c0-3.3 2.5-5.5 5.5-5.5S13 9.7 13 13"/>
-      </svg>
-    ),
-  },
 ]
 
 const BOTTOM_ITEMS = [

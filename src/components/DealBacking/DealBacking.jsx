@@ -343,12 +343,17 @@ export default function DealBacking() {
     return pos
   }, [deals, positions])
 
-  const closedAmt = deals.filter(d => d.closed).reduce((s, d) => s + d.acv, 0)
-
-  // Active month for filtering
+  // Active month for filtering — derived before closedAmt so both use it
   const activeMonth = monthFilter !== 'all'
     ? quarterMonths[parseInt(monthFilter[1]) - 1] ?? null
     : null
+
+  // Closed amount — respects month filter so column headers stay consistent
+  const closedAmt = deals.filter(d => {
+    if (!d.closed) return false
+    if (activeMonth) return isCloseInMonth({ f_close_date: d.closeDate }, activeMonth)
+    return true
+  }).reduce((s, d) => s + d.acv, 0)
 
   // Totals — filtered when month is active; C&C always included
   const totals = { worst_case: 0, call: 0, best_case: 0, bench: 0 }

@@ -3,7 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 export const DEFAULT_CAT_MAP = {
   worst_case: ['Worst Case', 'Commit'],
-  call:       ['Call', 'Probable', 'Forecast'],
+  call:       ['Forecast', 'Call', 'Probable'],
   best_case:  ['Best Case', 'Upside'],
   pipeline:   ['Pipeline'],
   closed:     ['Closed Won', 'Closed'],
@@ -12,7 +12,7 @@ export const DEFAULT_CAT_MAP = {
 
 export const DEFAULT_VOCAB = {
   worst_case: 'Worst Case',
-  call:       'Call',
+  call:       'Forecast',
   best_case:  'Best Case',
   pipeline:   'Pipeline',
   closed:     'Closed',

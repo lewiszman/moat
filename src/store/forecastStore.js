@@ -52,7 +52,7 @@ export function migrateSnapshot(snapshot) {
 }
 
 // ── Default values ─────────────────────────────────────────────
-const DEFAULT_RATES    = { r_worst_case: 80, r_call: 75, r_best_case: 50, r_pipe: 18, r_cnc: 18 }
+const DEFAULT_RATES    = { r_worst_case: 95, r_call: 80, r_best_case: 25, r_pipe: 10, r_cnc: 18 }
 const DEFAULT_PIPELINE = { pipe_worst_case: 0, pipe_call: 0, pipe_best_case: 0, pipe_pipe: 0 }
 const DEFAULT_CNC      = { cnc_opps: 5, cnc_asp: 14000 }
 const DEFAULT_MONTHLY  = {
@@ -124,7 +124,7 @@ function makeForecastStore(storeName, isNextQuarter = false) {
         importedData: null, importMeta: null, scopeSelected: null,
         previousImportSnapshot: null,
         activeView: 'manager',
-        forecastDefaults: { r_worst_case: 80, r_call: 75, r_best_case: 50, r_pipe: 18, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
+        forecastDefaults: { r_worst_case: 95, r_call: 80, r_best_case: 25, r_pipe: 10, r_cnc: 18, cnc_opps: 5, cnc_asp: 14000 },
         fyStartMonth: 1,
         fcOverrides: { worst_case: null, call: null, best_case: null },
 
