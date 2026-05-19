@@ -369,11 +369,11 @@ export const useInspectorStore = create(
         if (s.abortController) s.abortController.abort()
         s.isRunning = false; s.abortController = null
       }),
-      logUsage: (inputTokens, outputTokens, repCount, oppCount) => set(s => {
+      logUsage: (inputTokens, outputTokens, repCount, oppCount, userEmail = null) => set(s => {
         const cutoff = Date.now() - 90 * 24 * 3600 * 1000
         s.usageLog = [
           ...s.usageLog.filter(r => r.ts > cutoff),
-          { ts: Date.now(), input: inputTokens, output: outputTokens, reps: repCount, opps: oppCount },
+          { ts: Date.now(), input: inputTokens, output: outputTokens, reps: repCount, opps: oppCount, userEmail },
         ]
       }),
       clearUsageLog: () => set(s => { s.usageLog = [] }),

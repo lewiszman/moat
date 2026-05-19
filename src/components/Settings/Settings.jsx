@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useInspectorStore, useForecastStore, useQuarterStore } from '../../store/forecastStore'
 import { useSessionStore } from '../../store/sessionStore'
 import { useVocabStore, DEFAULT_VOCAB, useCatMapStore, DEFAULT_CAT_MAP } from '../../lib/vocab'
@@ -446,6 +446,19 @@ function UsageTab() {
     return { tok: inp + out, cost: inp * COST_PER_INPUT_TOKEN + out * COST_PER_OUTPUT_TOKEN }
   }
 
+  // Per-user breakdown (all-time)
+  const byUser = useMemo(() => {
+    const map = {}
+    usageLog.forEach(r => {
+      const key = r.userEmail || '(no account)'
+      if (!map[key]) map[key] = { email: key, input: 0, output: 0, runs: 0 }
+      map[key].input  += r.input
+      map[key].output += r.output
+      map[key].runs   += 1
+    })
+    return Object.values(map).sort((a, b) => (b.input + b.output) - (a.input + a.output))
+  }, [usageLog])
+
   return (
     <div>
       <Section title="API usage">
@@ -461,6 +474,35 @@ function UsageTab() {
             )
           })}
         </div>
+
+        {/* Per-user breakdown */}
+        {byUser.length > 0 && (
+          <div className="mb-4">
+            <div className="text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] mb-2">By user</div>
+            <div className="flex flex-col gap-1">
+              <div className="grid grid-cols-[1fr_auto_auto_auto] text-[10px] font-[700] uppercase tracking-wider text-[var(--tx2)] pb-1 border-b border-[var(--bdr2)]">
+                <span>User</span>
+                <span className="text-right">Runs</span>
+                <span className="text-right ml-4">Tokens</span>
+                <span className="text-right ml-4">Cost</span>
+              </div>
+              {byUser.map(u => {
+                const tok  = u.input + u.output
+                const cost = u.input * COST_PER_INPUT_TOKEN + u.output * COST_PER_OUTPUT_TOKEN
+                return (
+                  <div key={u.email} className="grid grid-cols-[1fr_auto_auto_auto] text-[12px] py-1.5 border-b border-[var(--bdr2)] last:border-0">
+                    <span className="text-[var(--tx)] truncate" title={u.email}>{u.email}</span>
+                    <span className="text-[var(--tx2)] text-right ml-4">{u.runs}</span>
+                    <span className="font-[600] text-right ml-4">{fmtTok(tok)}</span>
+                    <span className="text-[var(--tx2)] text-right ml-4">{fmtCost(cost)}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Run log */}
         {!usageLog.length
           ? <p className="text-[12px] text-[var(--tx2)]">No runs recorded yet.</p>
           : (
@@ -476,6 +518,7 @@ function UsageTab() {
                   <div key={i} className="grid grid-cols-[1fr_auto_auto] text-[12px] py-1.5 border-b border-[var(--bdr2)] last:border-0">
                     <span className="text-[var(--tx2)]">
                       {dt}
+                      {r.userEmail && <span className="ml-2 opacity-70 text-[10px]">{r.userEmail}</span>}
                       {r.opps ? <span className="ml-2 opacity-60">· {r.opps} opps · {r.reps} AEs</span> : ''}
                     </span>
                     <span className="font-[600] text-right">{fmtTok(tok)}</span>
@@ -503,7 +546,7 @@ function FeedbackForm() {
   const handleSend = () => {
     if (!message.trim()) return
     const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-    const body  = `${message}\n\n---\nVersion: v3.3 | ${today}`
+    const body  = `${message}\n\n---\nVersion: v3.4 | ${today}`
     const href  = `mailto:lewiszman+moat@gmail.com?subject=${encodeURIComponent(`[MOAT Feedback] ${type}`)}&body=${encodeURIComponent(body)}`
     window.location.href = href
     setSent(true)
@@ -551,9 +594,22 @@ function FeedbackForm() {
 // ── About tab ──────────────────────────────────────────────────
 const CHANGELOG = [
   {
+    version: 'v3.4',
+    date: 'May 2026',
+    current: true,
+    items: [
+      ['Google Sign In restored', 'Fixed auth initialization: initApiKey() now called unconditionally on app load, ensuring API key persists across page reloads even when Supabase is unavailable.'],
+      ['API key Save button', 'Settings → Inspector now has an explicit Save button with "Saved ✓" confirmation. Key no longer auto-commits on every keystroke; Enter key also saves.'],
+      ['Coverage moved to Beta', 'Coverage Model tab removed from main navigation and placed in a dedicated "Beta" section at the bottom of the sidebar with a purple BETA badge.'],
+      ['AI Insights column on by default', 'Pipeline Inspector AI Insights column now visible by default in the deal table (was hidden, required manual toggle).'],
+      ['Section renamed', '"Create & close what-if" section in Manager Walk-Up renamed to "In Quarter Pipeline - What If Analysis".'],
+      ['Usage analytics by user', 'API usage log now captures the signed-in Google account email per run. Usage tab shows a "By user" breakdown table (runs, tokens, cost per email) above the run history.'],
+    ],
+  },
+  {
     version: 'v3.3',
     date: 'Apr 2026',
-    current: true,
+    current: false,
     items: [
       ['Submission overrides', 'Override any FC tier (Worst Case / Call / Best Case) for submission. Entered via pencil icon on each card. Stored in amber-bordered card with strikethrough model value. Persists in localStorage and Supabase snapshots.'],
       ['Override indicator', 'Amber pill in topbar shows "⚠ Submission overrides active" when any override is set — click to clear all. Clear all link also appears below cards.'],
@@ -693,7 +749,7 @@ function AboutTab() {
         <div className="grid grid-cols-2 gap-3 text-[13px]">
           {[
             ['App',     "MOAT — Manager's Forecast Calculator"],
-            ['Version', 'v3.3'],
+            ['Version', 'v3.4'],
             ['Author',  'Lewis Man'],
             ['Stack',   'React 18 · Vite · Zustand · Tailwind'],
             ['AI',      'Claude Sonnet 4 via Anthropic API'],

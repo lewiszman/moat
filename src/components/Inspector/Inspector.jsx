@@ -597,6 +597,7 @@ function StatsBar({ stats, isRunning, runningOwner, repsDone, repsTotal }) {
 
 function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
   const insp = useInspectorStore()
+  const { user } = useSessionStore()
   const [insightsText,    setInsightsText]    = useState(null)
   const [insightsLoading, setInsightsLoading] = useState(false)
   const [insightsError,   setInsightsError]   = useState(null)
@@ -632,7 +633,7 @@ function InsightsTab({ repsSorted, active, apiKey, systemPrompt }) {
     try {
       const result = await fetchManagerInsights({ repsSorted, active, apiKey, systemPrompt })
       setInsightsText(result.text)
-      insp.logUsage(result.inputTokens, result.outputTokens, repsSorted.length, active.length)
+      insp.logUsage(result.inputTokens, result.outputTokens, repsSorted.length, active.length, user?.email || null)
     } catch (e) { setInsightsError(e.message) }
     setInsightsLoading(false)
   }
@@ -790,7 +791,8 @@ function DealDrawer({ deal, repResult, apiKey, onClose }) {
     try {
       const result = await fetchDealInspection({ deal, apiKey, signal: ac.signal })
       insp.setDealInspectionResult(dealKey, result)
-      insp.logUsage(result.inputTokens, result.outputTokens, 0, 1)
+      const { user: sessionUser } = useSessionStore.getState()
+      insp.logUsage(result.inputTokens, result.outputTokens, 0, 1, sessionUser?.email || null)
     } catch (err) {
       if (err.name !== 'AbortError') insp.setDealInspectionError(dealKey, err.message)
     }
@@ -1436,7 +1438,8 @@ export default function Inspector() {
       finishRun(lr)
       try { localStorage.setItem('moat-inspector-last-run', JSON.stringify({ data: lr, ts: Date.now() })) } catch {}
       setLastRunDate(new Date())
-      logUsage(totalIn, totalOut, sorted.length, active.length)
+      const { user: runUser } = useSessionStore.getState()
+      logUsage(totalIn, totalOut, sorted.length, active.length, runUser?.email || null)
     } catch (err) {
       console.error('[Inspector] run failed:', err)
       setRunError(err.message || 'Unexpected error — check the browser console')
