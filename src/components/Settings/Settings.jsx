@@ -68,8 +68,10 @@ function GeneralTab() {
 
   const [sfdcInput, setSfdcInput]     = useState(s.sfdcUrl || '')
   const [sfdcError, setSfdcError]     = useState('')
+  const [sfdcSaved, setSfdcSaved]     = useState(false)
   const [defaultInput, setDefaultInput] = useState(inspector.defaultSfdcUrl || '')
   const [defaultError, setDefaultError] = useState('')
+  const [defaultSaved, setDefaultSaved] = useState(false)
 
   // Vocab draft state
   const [vocabDraft, setVocabDraft] = useState({ ...vocabStore.vocab })
@@ -115,10 +117,16 @@ function GeneralTab() {
     setDefaultInput(val)
     if (isValidHttpsUrl(val)) {
       setDefaultError('')
-      inspector.setDefaultSfdcUrl(val)
     } else {
       setDefaultError('URL must start with https://')
     }
+  }
+
+  const handleDefaultSave = () => {
+    if (defaultError) return
+    inspector.setDefaultSfdcUrl(defaultInput)
+    setDefaultSaved(true)
+    setTimeout(() => setDefaultSaved(false), 2000)
   }
 
   const handleSfdcChange = (e) => {
@@ -126,10 +134,16 @@ function GeneralTab() {
     setSfdcInput(val)
     if (isValidHttpsUrl(val)) {
       setSfdcError('')
-      s.setField('sfdcUrl', val)
     } else {
       setSfdcError('URL must start with https://')
     }
+  }
+
+  const handleSfdcSave = () => {
+    if (sfdcError) return
+    s.setField('sfdcUrl', sfdcInput)
+    setSfdcSaved(true)
+    setTimeout(() => setSfdcSaved(false), 2000)
   }
 
   const handleClear = () => {
@@ -155,23 +169,43 @@ function GeneralTab() {
       <Section title="Salesforce">
         <Row label="Default Report URL" sub="Applies to both CQ and Q+1 unless overridden below">
           <div className="flex flex-col items-end gap-1">
-            <input
-              className={`w-72 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${defaultError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
-              value={defaultInput}
-              onChange={handleDefaultChange}
-              placeholder="https://..."
-            />
+            <div className="flex items-center gap-2">
+              <input
+                className={`w-64 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${defaultError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
+                value={defaultInput}
+                onChange={handleDefaultChange}
+                onKeyDown={e => e.key === 'Enter' && handleDefaultSave()}
+                placeholder="https://..."
+              />
+              <button
+                onClick={handleDefaultSave}
+                disabled={!!defaultError}
+                className="btn btn-primary text-[11px] whitespace-nowrap"
+              >
+                {defaultSaved ? 'Saved ✓' : 'Save'}
+              </button>
+            </div>
             {defaultError && <span className="text-[11px] text-red-500">{defaultError}</span>}
           </div>
         </Row>
         <Row label={overrideLabel} sub="Leave blank to use the default URL above">
           <div className="flex flex-col items-end gap-1">
-            <input
-              className={`w-72 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${sfdcError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
-              value={sfdcInput}
-              onChange={handleSfdcChange}
-              placeholder={inspector.defaultSfdcUrl || 'https://...'}
-            />
+            <div className="flex items-center gap-2">
+              <input
+                className={`w-64 text-[12px] border rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)] ${sfdcError ? 'border-red-400' : 'border-[var(--bdr2)]'}`}
+                value={sfdcInput}
+                onChange={handleSfdcChange}
+                onKeyDown={e => e.key === 'Enter' && handleSfdcSave()}
+                placeholder={inspector.defaultSfdcUrl || 'https://...'}
+              />
+              <button
+                onClick={handleSfdcSave}
+                disabled={!!sfdcError}
+                className="btn btn-primary text-[11px] whitespace-nowrap"
+              >
+                {sfdcSaved ? 'Saved ✓' : 'Save'}
+              </button>
+            </div>
             {sfdcError && <span className="text-[11px] text-red-500">{sfdcError}</span>}
           </div>
         </Row>
