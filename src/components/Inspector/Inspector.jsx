@@ -1213,7 +1213,7 @@ export default function Inspector() {
     ae: true, deal: true, amount: true, close: true,
     stage: true, fc: true, nextstep: true,
     competitor: true, map: true, daysstage: false,
-    flags: true, aiaction: false, note: false,
+    flags: true, aiaction: true, note: false,
   })
   const [filterCompetitors, setFilterCompetitors] = useState([])
   const [filterNoMap,  setFilterNoMap]  = useState(false)

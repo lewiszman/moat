@@ -264,7 +264,7 @@ export default function ManagerView() {
       </div>
 
       <div className="sec-hd">
-        Create &amp; close what-if
+        In Quarter Pipeline - What If Analysis
         <SectionComment sectionKey="cnc" placeholder="e.g. ASP reflects SMB segment only — mid-market deals excluded" />
       </div>
       <CncWhatIf />

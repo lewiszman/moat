@@ -365,6 +365,14 @@ function InspectorTab() {
   const { apiKey, setApiKey, systemPrompt, setSystemPrompt, coachingFocus, setCoachingFocus } = useInspectorStore()
   const user     = useSessionStore(s => s.user)
   const [showKey, setShowKey] = useState(false)
+  const [keyDraft, setKeyDraft] = useState(apiKey)
+  const [keySaved, setKeySaved] = useState(false)
+
+  const handleKeySave = () => {
+    setApiKey(keyDraft, user?.id)
+    setKeySaved(true)
+    setTimeout(() => setKeySaved(false), 2000)
+  }
 
   return (
     <div>
@@ -373,13 +381,20 @@ function InspectorTab() {
           <div className="flex items-center gap-2">
             <input
               type={showKey ? 'text' : 'password'}
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value, user?.id)}
+              value={keyDraft}
+              onChange={e => setKeyDraft(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleKeySave()}
               placeholder="sk-ant-..."
               className="w-60 font-mono text-[12px] border border-[var(--bdr2)] rounded-[var(--rm)] px-3 py-1.5 bg-[var(--bg)] text-[var(--tx)] outline-none focus:border-[var(--blue)]"
             />
             <button onClick={() => setShowKey(s => !s)} className="btn text-[11px]">
               {showKey ? 'Hide' : 'Show'}
+            </button>
+            <button
+              onClick={handleKeySave}
+              className={`btn text-[11px] ${keySaved ? 'border-green-500 text-green-700' : 'btn-primary'}`}
+            >
+              {keySaved ? 'Saved ✓' : 'Save'}
             </button>
           </div>
         </Row>
