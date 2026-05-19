@@ -31,6 +31,9 @@ export default function App() {
   useEffect(() => {
     // Supabase auth — sync current session and listen for changes (no-op if not configured)
     let subscription = null
+    // Always restore API key from localStorage (works even without Supabase)
+    initApiKey(null)
+
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         const user = session?.user ?? null

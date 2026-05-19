@@ -27,15 +27,6 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: 'coverage',
-    label: 'Coverage',
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 3.5h13M3 7.5h9M5.5 11.5h4"/>
-      </svg>
-    ),
-  },
-  {
     id: 'dealback',
     label: 'Deal-Backing',
     icon: (
@@ -43,6 +34,19 @@ const NAV_ITEMS = [
         <rect x="1" y="3" width="3" height="9" rx=".75"/>
         <rect x="5.5" y="5" width="3" height="7" rx=".75"/>
         <rect x="10" y="1.5" width="3.5" height="10.5" rx=".75"/>
+      </svg>
+    ),
+  },
+]
+
+const BETA_ITEMS = [
+  {
+    id: 'coverage',
+    label: 'Coverage',
+    badge: 'BETA',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 3.5h13M3 7.5h9M5.5 11.5h4"/>
       </svg>
     ),
   },
@@ -131,6 +135,19 @@ export default function Sidebar() {
 
       {/* Bottom nav */}
       <div className="flex flex-col gap-1 p-2 border-t border-[var(--bdr2)]">
+        {/* Beta section */}
+        {BETA_ITEMS.length > 0 && (
+          <>
+            {expanded && (
+              <div className="px-3 pt-1 pb-0.5 text-[9px] font-[700] uppercase tracking-widest text-[var(--tx2)] opacity-50">
+                Beta
+              </div>
+            )}
+            {BETA_ITEMS.map(item => <NavItem key={item.id} item={item} />)}
+            <div className="my-1 border-t border-[var(--bdr2)]" />
+          </>
+        )}
+
         {/* Guide trigger */}
         <button
           onClick={() => setTourOpen(true)}

@@ -696,7 +696,7 @@ export default function ManagerView() {
         <div className="p-1"><WowTracker /></div>
       </Section>
 
-      <Section title="IQP detail" subtitle="· in-quarter pipeline">
+      <Section title="In Quarter Pipeline - What If Analysis" subtitle="· IQP">
         <IQPDetail />
       </Section>
 

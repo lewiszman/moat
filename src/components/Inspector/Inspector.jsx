@@ -373,25 +373,25 @@ function InspectionWorkspace({ deal, onClose, totalPipe }) {
         {/* 5 risk dimension cards */}
         {RISK_DIMS.map(dim => <DimCard key={dim.id} dim={dim} deal={deal} />)}
 
-        {/* AI insight */}
-        {apiKey && (
-          <div className="rounded-lg border border-[var(--bdr2)] overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg2)] border-b border-[var(--bdr2)]">
-              <span className="text-[12px] font-[700] text-[var(--tx)]">✨ AI Deal Insight</span>
-              <button onClick={generateAI} disabled={aiLoading}
-                className="text-[11px] px-2.5 py-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:opacity-80 border-none cursor-pointer disabled:opacity-50">
-                {aiLoading ? 'Thinking…' : aiText ? 'Regenerate' : 'Generate'}
-              </button>
-            </div>
-            <div className="px-3 py-2.5 text-[12px]">
-              {aiError  && <div className="text-red-600">{aiError}</div>}
-              {aiText   && <div className="text-[var(--tx)] leading-relaxed whitespace-pre-wrap">{aiText}</div>}
-              {!aiText && !aiLoading && !aiError && (
-                <div className="text-[var(--tx2)]">Generate AI coaching insight for this deal.</div>
-              )}
-            </div>
+        {/* AI insight — always shown; generate disabled when no API key */}
+        <div className="rounded-lg border border-[var(--bdr2)] overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 bg-[var(--bg2)] border-b border-[var(--bdr2)]">
+            <span className="text-[12px] font-[700] text-[var(--tx)]">✨ AI Deal Insight</span>
+            <button onClick={generateAI} disabled={aiLoading || !apiKey}
+              className="text-[11px] px-2.5 py-1 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 hover:opacity-80 border-none cursor-pointer disabled:opacity-50">
+              {aiLoading ? 'Thinking…' : aiText ? 'Regenerate' : 'Generate'}
+            </button>
           </div>
-        )}
+          <div className="px-3 py-2.5 text-[12px]">
+            {aiError  && <div className="text-red-600">{aiError}</div>}
+            {aiText   && <div className="text-[var(--tx)] leading-relaxed whitespace-pre-wrap">{aiText}</div>}
+            {!aiText && !aiLoading && !aiError && (
+              <div className="text-[var(--tx2)]">
+                {apiKey ? 'Generate AI coaching insight for this deal.' : 'Add your Anthropic API key in Settings → Inspector to enable AI insights.'}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Manager notes */}
         <div className="rounded-lg border border-[var(--bdr2)] overflow-hidden">
